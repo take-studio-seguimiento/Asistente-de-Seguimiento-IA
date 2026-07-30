@@ -4,6 +4,9 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[build.environment]
+  NODE_VERSION = "20"
+
 # SPA: cualquier ruta cae en index.html (React maneja el resto en cliente)
 [[redirects]]
   from = "/*"
