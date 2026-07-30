@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm -v)",
+      "Bash(npm install *)",
+      "Bash(npx esbuild *)",
+      "Bash(npm run *)"
+    ]
+  }
+}

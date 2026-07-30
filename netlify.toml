@@ -1,0 +1,11 @@
+# Configuración de despliegue en Netlify
+[build]
+  command = "npm run build"
+  publish = "dist"
+  functions = "netlify/functions"
+
+# SPA: cualquier ruta cae en index.html (React maneja el resto en cliente)
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
