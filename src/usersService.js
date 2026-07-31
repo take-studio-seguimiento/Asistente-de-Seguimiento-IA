@@ -19,18 +19,30 @@ export const isAdminEmail = (email) => ADMIN_EMAILS.includes((email || "").toLow
 
 // Crea el perfil del usuario si no existe. El admin queda aprobado;
 // cualquier otro queda "pending" hasta que el admin lo apruebe.
-export async function ensureUserDoc(user) {
+// Si se pasa `name` y el doc no lo tiene todavía, lo completa (evita
+// que se pierda el nombre por la carrera entre el alta y el listener).
+export async function ensureUserDoc(user, name = "") {
   const ref = doc(db, "users", user.uid);
   const snap = await getDoc(ref);
-  if (snap.exists()) return;
-  const admin = isAdminEmail(user.email);
-  await setDoc(ref, {
-    email: user.email || "",
-    name: "",
-    role: admin ? "admin" : "asesor",
-    status: admin ? "approved" : "pending",
-    createdAt: Date.now(),
-  });
+  const clean = (name || "").trim();
+  if (!snap.exists()) {
+    const admin = isAdminEmail(user.email);
+    await setDoc(ref, {
+      email: user.email || "",
+      name: clean,
+      role: admin ? "admin" : "asesor",
+      status: admin ? "approved" : "pending",
+      createdAt: Date.now(),
+    });
+  } else if (clean && !snap.data().name) {
+    await updateDoc(ref, { name: clean });
+  }
+}
+
+// Edita el nombre de un perfil. Sirve para el usuario sobre sí mismo
+// y para el admin sobre cualquier asesor (las reglas lo permiten).
+export async function updateUserName(uid, name) {
+  await updateDoc(doc(db, "users", uid), { name: (name || "").trim() });
 }
 
 // Escucha en vivo el perfil propio (para que la pantalla de "pendiente"

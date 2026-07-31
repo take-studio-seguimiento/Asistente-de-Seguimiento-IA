@@ -12,12 +12,13 @@ import {
   subscribeUserProfile,
   subscribeAllUsers,
   setUserStatus,
+  updateUserName,
   isAdminEmail,
 } from "./usersService";
 import Login from "./Login";
 import SpecularButton from "./SpecularButton";
 import SpotlightCard from "./SpotlightCard";
-import { IconSearch, IconX, IconPlus, IconCalendar, IconCheck, IconSparkle, IconChevronDown, IconChevronUp, IconExternal } from "./icons";
+import { IconSearch, IconX, IconPlus, IconCalendar, IconCheck, IconSparkle, IconChevronDown, IconChevronUp, IconExternal, IconPencil } from "./icons";
 
 // ============================================================
 // Take Studio — Seguimiento de Clientes (Prototipo v3)
@@ -203,7 +204,7 @@ export default function App() {
       msg="Tu cuenta se creó y está esperando la aprobación del administrador. Vas a poder entrar apenas te habiliten." />);
   }
 
-  return shell(<Workspace uid={user.uid} isAdmin={isAdmin} />);
+  return shell(<Workspace uid={user.uid} isAdmin={isAdmin} profile={profile} />);
 }
 
 // Pantalla de estado de cuenta (pendiente / no habilitada)
@@ -221,11 +222,12 @@ function AccountStatus({ title, msg }) {
 }
 
 // ================= WORKSPACE (app con sesión aprobada) =================
-function Workspace({ uid, isAdmin }) {
+function Workspace({ uid, isAdmin, profile }) {
   const [clients, setClients] = useState(null);
   const [openId, setOpenId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [showAsesores, setShowAsesores] = useState(false);
+  const setMyName = (name) => updateUserName(uid, name).catch((e) => console.error("[users] nombre:", e));
 
   useEffect(() => {
     const unsub = subscribeClientes(
@@ -248,7 +250,8 @@ function Workspace({ uid, isAdmin }) {
       {!openClient ? (
         <Dashboard clients={clients} onOpen={setOpenId} onAdd={() => setShowAdd(true)}
           onSave={upsert} onLogout={() => logout()} isAdmin={isAdmin}
-          onOpenAsesores={() => setShowAsesores(true)} />
+          onOpenAsesores={() => setShowAsesores(true)}
+          profileName={profile?.name || ""} onSetName={setMyName} />
       ) : (
         <Detail client={openClient} onBack={() => setOpenId(null)} onSave={upsert}
           onDelete={(id) => { remove(id); setOpenId(null); }} />
@@ -265,10 +268,14 @@ const statusLabel = (s) => (s === "approved" ? "Aprobado" : s === "rejected" ? "
 
 function AsesoresModal({ onClose }) {
   const [users, setUsers] = useState(null);
+  const [editId, setEditId] = useState(null);
+  const [draft, setDraft] = useState("");
   useEffect(() => subscribeAllUsers(setUsers, () => setUsers([])), []);
 
   const setStatus = (id, status) =>
     setUserStatus(id, status).catch((e) => console.error("[users] no se pudo cambiar estado:", e));
+  const startEdit = (u) => { setEditId(u.id); setDraft(u.name || ""); };
+  const saveEdit = (id) => { updateUserName(id, draft).catch((e) => console.error("[users] nombre:", e)); setEditId(null); };
 
   const pend = (users || []).filter((u) => u.status === "pending");
   const others = (users || []).filter((u) => u.status !== "pending");
@@ -276,6 +283,18 @@ function AsesoresModal({ onClose }) {
   const Row = (u) => (
     <div key={u.id} className="ts-asesor">
       <div className="ts-asesor-info">
+        {editId === u.id ? (
+          <div className="ts-asesor-edit">
+            <input className="ts-input" autoFocus value={draft} placeholder="Nombre y apellido"
+              onChange={(e) => setDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") saveEdit(u.id); if (e.key === "Escape") setEditId(null); }} />
+            <button className="ts-btn-primary ts-mini" onClick={() => saveEdit(u.id)}>OK</button>
+          </div>
+        ) : (
+          <button className="ts-asesor-name" onClick={() => startEdit(u)} title="Editar nombre">
+            {u.name || "Sin nombre"} <span className="ts-asesor-edit-ic"><IconPencil /></span>
+          </button>
+        )}
         <div className="ts-asesor-email">{u.email || "(sin email)"}{u.role === "admin" ? " · admin" : ""}</div>
         <div className={`ts-asesor-status st-${u.status}`}>{statusLabel(u.status)}</div>
       </div>
@@ -307,10 +326,14 @@ function AsesoresModal({ onClose }) {
 }
 
 // ================= DASHBOARD =================
-function Dashboard({ clients, onOpen, onAdd, onSave, onLogout, isAdmin, onOpenAsesores }) {
+function Dashboard({ clients, onOpen, onAdd, onSave, onLogout, isAdmin, onOpenAsesores, profileName, onSetName }) {
   const [filter, setFilter] = useState("todos");
   const [view, setView] = useState("agenda"); // agenda | fichas
   const [query, setQuery] = useState("");
+  const [editingName, setEditingName] = useState(false);
+  const [nameDraft, setNameDraft] = useState(profileName || "");
+  const firstName = (profileName || "").trim().split(/\s+/)[0];
+  const saveName = () => { onSetName(nameDraft.trim()); setEditingName(false); };
   if (!clients) return <div className="ts-loading">Cargando…</div>;
 
   // --- agenda (agrupada por límites de calendario) ---
@@ -372,7 +395,18 @@ function Dashboard({ clients, onOpen, onAdd, onSave, onLogout, isAdmin, onOpenAs
       </header>
 
       <div className="ts-hero">
-        <div className="ts-eyebrow">— Seguimiento de clientes —</div>
+        {editingName ? (
+          <div className="ts-greet-edit">
+            <input className="ts-input" autoFocus value={nameDraft} placeholder="Tu nombre y apellido"
+              onChange={(e) => setNameDraft(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter") saveName(); if (e.key === "Escape") setEditingName(false); }} />
+            <button className="ts-btn-primary ts-mini" onClick={saveName}>Guardar</button>
+          </div>
+        ) : (
+          <button className="ts-eyebrow ts-greet" onClick={() => { setNameDraft(profileName || ""); setEditingName(true); }} title="Editar nombre">
+            {firstName ? `¡Hola, ${firstName}!` : "¡Hola! Tocá para poner tu nombre"}
+          </button>
+        )}
         <h1 className="ts-h1">Tu día, <span className="ts-ital">en orden</span></h1>
       </div>
 
@@ -896,6 +930,17 @@ const CSS = `
 .ts-asesor-status.st-pending{color:var(--gold-deep)}
 .ts-asesor-actions{display:flex;gap:8px;flex:none}
 .ts-mini{padding:8px 14px;font-size:12.5px}
+.ts-asesor-name{background:none;border:none;cursor:pointer;color:var(--ink);font-family:inherit;font-size:14px;font-weight:600;padding:0;display:inline-flex;align-items:center;gap:6px}
+.ts-asesor-name:hover{color:var(--gold-deep)}
+.ts-asesor-edit-ic{display:inline-flex;opacity:.55}
+.ts-asesor-edit-ic svg{width:12px;height:12px}
+.ts-asesor-edit{display:flex;gap:8px;align-items:center;margin-bottom:3px}
+.ts-asesor-edit .ts-input{margin-bottom:0}
+/* saludo editable en el hero */
+.ts-greet{background:none;border:none;padding:0;cursor:pointer;font-family:inherit}
+.ts-greet:hover{color:var(--ink)}
+.ts-greet-edit{display:flex;gap:8px;justify-content:center;align-items:center;max-width:360px;margin:0 auto 16px}
+.ts-greet-edit .ts-input{margin-bottom:0;text-align:center}
 .ts-wordmark{font-family:'Poppins',sans-serif;font-weight:700;font-size:22px;letter-spacing:.02em;line-height:1}
 .ts-wordmark span{display:block;font-size:9px;font-weight:600;letter-spacing:.42em;color:var(--ink-soft);margin-top:1px}
 .ts-hero{text-align:center;padding:48px 0 30px}

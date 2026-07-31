@@ -1,28 +1,31 @@
 import React, { useState } from "react";
 import { login, signup, authErrorMessage } from "./auth";
+import { ensureUserDoc } from "./usersService";
 import Grainient from "./Grainient";
 import SpecularButton from "./SpecularButton";
 
 // Pantalla de login / registro. Se muestra mientras no haya sesión.
 export default function Login() {
   const [mode, setMode] = useState("login"); // login | signup
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
 
   const isSignup = mode === "signup";
+  const canSubmit = !!email && !!password && (!isSignup || !!name.trim());
 
   const submit = async (e) => {
     e.preventDefault();
-    if (busy) return;
+    if (busy || !canSubmit) return;
     setError("");
     setBusy(true);
     try {
       if (isSignup) {
-        await signup(email, password);
-        // Firebase inicia sesión con la cuenta nueva; App crea el perfil
-        // pendiente y muestra la pantalla "cuenta pendiente".
+        const u = await signup(email, password);
+        // Guarda el nombre en el perfil (queda pendiente de aprobación).
+        try { await ensureUserDoc(u, name); } catch (err) { console.error("[users] alta:", err); }
       } else {
         await login(email, password);
       }
@@ -60,6 +63,20 @@ export default function Login() {
           {isSignup ? <>Creá tu <span className="ts-ital">cuenta</span></> : <>Ingresá a tu <span className="ts-ital">cuenta</span></>}
         </h1>
 
+        {isSignup && (
+          <>
+            <label className="ts-label">Nombre y apellido</label>
+            <input
+              className="ts-input"
+              type="text"
+              autoComplete="name"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="Nico Pérez"
+            />
+          </>
+        )}
+
         <label className="ts-label">Email</label>
         <input
           className="ts-input"
@@ -95,9 +112,9 @@ export default function Login() {
           baseColor="#7a672f"
           intensity={1.9}
           shineSize={18}
-          autoAnimate={!!email && !!password}
+          autoAnimate={canSubmit}
           proximity={360}
-          disabled={!email || !password}
+          disabled={!canSubmit}
         >
           {busy ? (
             <span className="ts-btn-ic"><span className="ts-spinner" /> {isSignup ? "Creando" : "Ingresando"}</span>
