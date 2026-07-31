@@ -875,7 +875,8 @@ const CSS = `
   color:var(--ink);font:inherit;font-size:14px;padding:12px 14px;margin-bottom:6px;outline:none;transition:border-color .18s,box-shadow .18s}
 .ts-input::placeholder,.ts-textarea::placeholder{color:var(--ink-soft)}
 .ts-input:focus,.ts-textarea:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(216,180,94,.14)}
-.ts-input[type=date],.ts-input[type=time]{color-scheme:dark}
+.ts-input[type=date],.ts-input[type=time],select.ts-input{color-scheme:dark}
+.ts-input option{background:#1b1a20;color:#F1ECE3}
 .ts-textarea{resize:vertical;line-height:1.6}
 .ts-row{display:flex;gap:14px}
 
@@ -924,8 +925,10 @@ const CSS = `
 .ts-hist-head:hover .ts-hist-arrow{color:var(--gold-deep)}
 .ts-hist-arrow{display:flex;color:var(--ink-soft)}
 .ts-hist-arrow svg{width:18px;height:18px}
-.ts-btn-ic{display:inline-flex;align-items:center;gap:7px}
+.ts-btn-ic{display:inline-flex;align-items:center;gap:8px}
 .ts-btn-ic svg{width:16px;height:16px}
+@keyframes ts-spin{to{transform:rotate(360deg)}}
+.ts-spinner{width:15px;height:15px;border-radius:50%;border:2px solid rgba(247,228,160,.35);border-top-color:#F7E4A0;animation:ts-spin .7s linear infinite;display:inline-block}
 .ts-hist{margin-top:4px}
 .ts-hist .ts-seg{display:flex;width:100%;margin:0 0 12px}
 .ts-hist .ts-seg-btn{flex:1;text-align:center}

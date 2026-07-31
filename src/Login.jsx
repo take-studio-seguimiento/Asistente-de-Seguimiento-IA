@@ -72,18 +72,21 @@ export default function Login() {
           size="lg"
           className="ts-login-submit"
           radius={999}
-          tint="#1C1A17"
-          tintOpacity={1}
-          textColor="#F4F1EA"
-          lineColor="#F5DE97"
-          baseColor="#6a5a33"
-          intensity={1.7}
-          shineSize={16}
-          autoAnimate={!(busy || !email || !password)}
+          tint="#141117"
+          tintOpacity={0.5}
+          blur={12}
+          textColor="#FBF3DF"
+          lineColor="#F7E4A0"
+          baseColor="#7a672f"
+          intensity={1.9}
+          shineSize={18}
+          autoAnimate={!!email && !!password}
           proximity={360}
-          disabled={busy || !email || !password}
+          disabled={!email || !password}
         >
-          {busy ? "Entrando…" : "Entrar"}
+          {busy ? (
+            <span className="ts-btn-ic"><span className="ts-spinner" /> Ingresando</span>
+          ) : "Entrar"}
         </SpecularButton>
       </form>
     </div>
