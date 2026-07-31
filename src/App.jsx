@@ -227,6 +227,10 @@ function Workspace({ uid, isAdmin, profile }) {
   const [openId, setOpenId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
   const [showAsesores, setShowAsesores] = useState(false);
+  // Estado del tablero, arriba para que se conserve al abrir/cerrar un lead.
+  const [view, setView] = useState("agenda"); // agenda | fichas
+  const [filter, setFilter] = useState("todos");
+  const [query, setQuery] = useState("");
   const setMyName = (name) => updateUserName(uid, name).catch((e) => console.error("[users] nombre:", e));
 
   useEffect(() => {
@@ -251,7 +255,9 @@ function Workspace({ uid, isAdmin, profile }) {
         <Dashboard clients={clients} onOpen={setOpenId} onAdd={() => setShowAdd(true)}
           onSave={upsert} onLogout={() => logout()} isAdmin={isAdmin}
           onOpenAsesores={() => setShowAsesores(true)}
-          profileName={profile?.name || ""} onSetName={setMyName} />
+          profileName={profile?.name || ""} onSetName={setMyName}
+          view={view} setView={setView} filter={filter} setFilter={setFilter}
+          query={query} setQuery={setQuery} />
       ) : (
         <Detail client={openClient} onBack={() => setOpenId(null)} onSave={upsert}
           onDelete={(id) => { remove(id); setOpenId(null); }} />
@@ -326,10 +332,7 @@ function AsesoresModal({ onClose }) {
 }
 
 // ================= DASHBOARD =================
-function Dashboard({ clients, onOpen, onAdd, onSave, onLogout, isAdmin, onOpenAsesores, profileName, onSetName }) {
-  const [filter, setFilter] = useState("todos");
-  const [view, setView] = useState("agenda"); // agenda | fichas
-  const [query, setQuery] = useState("");
+function Dashboard({ clients, onOpen, onAdd, onSave, onLogout, isAdmin, onOpenAsesores, profileName, onSetName, view, setView, filter, setFilter, query, setQuery }) {
   const [editingName, setEditingName] = useState(false);
   const [nameDraft, setNameDraft] = useState(profileName || "");
   const firstName = (profileName || "").trim().split(/\s+/)[0];
