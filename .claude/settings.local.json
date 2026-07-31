@@ -4,7 +4,14 @@
       "Bash(npm -v)",
       "Bash(npm install *)",
       "Bash(npx esbuild *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(git commit -q -m ' *)",
+      "Bash(git add *)",
+      "Bash(git remote *)",
+      "Bash(git push *)",
+      "WebFetch(domain:docs.google.com)",
+      "WebFetch(domain:doc-10-5o-docstext.googleusercontent.com)",
+      "Bash(node -e \"const norm=\\(s\\)=>\\(s||''\\).toString\\(\\).toLowerCase\\(\\).normalize\\('NFD'\\).replace\\(/[\\\\u0300-\\\\u036f]/g,''\\); console.log\\('quinceañera ->', norm\\('Quinceañera'\\)\\); console.log\\('SABRINA CEJAS ->', norm\\('SABRINA CEJAS'\\)\\); console.log\\('match cejas en sabrina?', norm\\('Sabrina Cejas'\\).includes\\(norm\\('cejas'\\)\\)\\);\")"
     ]
   }
 }

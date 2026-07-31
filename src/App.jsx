@@ -6,8 +6,11 @@ import {
   seedIfEmpty,
 } from "./clientesService";
 import { callGemini } from "./gemini";
+import { fetchGoogleDoc } from "./docs";
 import { onAuth, logout } from "./auth";
 import Login from "./Login";
+import SpecularButton from "./SpecularButton";
+import SpotlightCard from "./SpotlightCard";
 
 // ============================================================
 // Take Studio — Seguimiento de Clientes (Prototipo v3)
@@ -18,7 +21,7 @@ import Login from "./Login";
 // Auth: Firebase Authentication (email + contraseña) — ver src/auth.js
 // ============================================================
 
-const EVENT_TYPES = ["Quince", "Boda", "Book", "Otro"];
+const EVENT_TYPES = ["Quince", "18 años", "Cumpleaños", "Boda", "Egresados", "Book", "Otro"];
 const TZ = "America/Argentina/Buenos_Aires";
 
 const STATUSES = [
@@ -75,6 +78,51 @@ function daysFromToday(iso) {
   if (!iso) return null;
   const a = parseISO(todayISO()), b = parseISO(iso);
   return Math.round((b - a) / 86400000);
+}
+// Fin de la semana calendario (domingo) en ISO. Semana lun–dom.
+function endOfWeekISO() {
+  const d = parseISO(todayISO());
+  const dow = d.getDay(); // 0=dom ... 6=sáb
+  const toSunday = dow === 0 ? 0 : 7 - dow;
+  d.setDate(d.getDate() + toSunday);
+  return d.toISOString().slice(0, 10);
+}
+// Fin del mes calendario en ISO.
+function endOfMonthISO() {
+  const d = parseISO(todayISO());
+  const end = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+  return end.toISOString().slice(0, 10);
+}
+// Etiqueta del festejado según el tipo de evento.
+function celebranteLabel(eventType) {
+  if (eventType === "Quince") return "Quinceañera";
+  if (eventType === "18 años" || eventType === "Cumpleaños") return "Cumpleañera/o";
+  if (eventType === "Boda") return "Festejados";
+  if (eventType === "Egresados") return "Curso / división";
+  return "Homenajeada/o";
+}
+// Normaliza texto para búsqueda: minúsculas y sin acentos.
+function norm(s) {
+  return (s || "").toString().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
+}
+// ISO (YYYY-MM-DD) → DD/MM/YYYY (para que la búsqueda por fecha sea flexible).
+function ddmmyyyy(iso) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(iso || "")) return "";
+  const [y, m, d] = iso.split("-");
+  return `${d}/${m}/${y}`;
+}
+// ¿El lead matchea la búsqueda? Busca en cualquier dato cargado.
+function matchesQuery(c, q) {
+  if (!q) return true;
+  const hay = norm([
+    c.name, c.celebrante, c.eventType, c.context, c.phone,
+    c.meetingDate, ddmmyyyy(c.meetingDate), c.meetingDate ? prettyDate(c.meetingDate) : "",
+    c.fechaFiesta, ddmmyyyy(c.fechaFiesta), c.fechaFiesta ? prettyDate(c.fechaFiesta) : "",
+  ].join(" "));
+  if (hay.includes(q)) return true;
+  const qDigits = q.replace(/\D/g, "");
+  if (qDigits && (c.phone || "").replace(/\D/g, "").includes(qDigits)) return true;
+  return false;
 }
 function prettyDate(iso, time) {
   if (!iso) return "Sin fecha";
@@ -196,16 +244,22 @@ function Workspace() {
 function Dashboard({ clients, onOpen, onAdd, onSave, onLogout }) {
   const [filter, setFilter] = useState("todos");
   const [view, setView] = useState("agenda"); // agenda | fichas
+  const [query, setQuery] = useState("");
   if (!clients) return <div className="ts-loading">Cargando…</div>;
 
-  // --- agenda ---
+  // --- agenda (agrupada por límites de calendario) ---
   const withTask = clients.filter((c) => c.reminder && c.reminder.text && !c.reminder.done);
-  const groups = { hoy: [], semana: [], despues: [], sinfecha: [] };
+  const hoyISO = todayISO();
+  const finSemana = endOfWeekISO();
+  const finMes = endOfMonthISO();
+  const groups = { atrasadas: [], hoy: [], semana: [], mes: [], despues: [], sinfecha: [] };
   withTask.forEach((c) => {
-    const d = daysFromToday(c.reminder.date);
-    if (d === null) groups.sinfecha.push(c);
-    else if (d <= 0) groups.hoy.push(c);
-    else if (d <= 7) groups.semana.push(c);
+    const d = c.reminder.date;
+    if (!d) groups.sinfecha.push(c);
+    else if (d < hoyISO) groups.atrasadas.push(c);
+    else if (d === hoyISO) groups.hoy.push(c);
+    else if (d <= finSemana) groups.semana.push(c);
+    else if (d <= finMes) groups.mes.push(c);
     else groups.despues.push(c);
   });
   const sortByDate = (a, b) => (a.reminder.date || "9").localeCompare(b.reminder.date || "9") ||
@@ -215,7 +269,10 @@ function Dashboard({ clients, onOpen, onAdd, onSave, onLogout }) {
   const onComplete = (c) => onSave(withCompletedReminder(c));
 
   // --- fichas ---
-  const filtered = clients.filter((c) => filter === "todos" || c.status === filter);
+  const q = norm(query.trim());
+  const filtered = clients.filter(
+    (c) => (filter === "todos" || c.status === filter) && matchesQuery(c, q)
+  );
   const sorted = [...filtered].sort((a, b) => b.updatedAt - a.updatedAt);
 
   const TaskRow = (c) => (
@@ -239,7 +296,9 @@ function Dashboard({ clients, onOpen, onAdd, onSave, onLogout }) {
         <div className="ts-wordmark">TAKE<span>STUDIO</span></div>
         <div className="ts-header-actions">
           <button className="ts-btn-ghost" onClick={onLogout}>Salir</button>
-          <button className="ts-btn-primary" onClick={onAdd}>+ Nuevo cliente</button>
+          <SpecularButton size="sm" radius={999} tint="#1C1A17" tintOpacity={1}
+            textColor="#F4F1EA" lineColor="#E8C979" baseColor="#4a4034" proximity={260}
+            onClick={onAdd}>+ Nuevo cliente</SpecularButton>
         </div>
       </header>
 
@@ -258,13 +317,21 @@ function Dashboard({ clients, onOpen, onAdd, onSave, onLogout }) {
           {withTask.length === 0 && (
             <div className="ts-empty">No hay tareas pendientes. Entrá a una ficha y cargá el próximo seguimiento.</div>
           )}
+          {groups.atrasadas.length > 0 && <><div className="ts-agenda-h atrasada">Atrasadas</div>{groups.atrasadas.map(TaskRow)}</>}
           {groups.hoy.length > 0 && <><div className="ts-agenda-h hoy">Hoy</div>{groups.hoy.map(TaskRow)}</>}
           {groups.semana.length > 0 && <><div className="ts-agenda-h">Esta semana</div>{groups.semana.map(TaskRow)}</>}
+          {groups.mes.length > 0 && <><div className="ts-agenda-h">Este mes</div>{groups.mes.map(TaskRow)}</>}
           {groups.despues.length > 0 && <><div className="ts-agenda-h">Más adelante</div>{groups.despues.map(TaskRow)}</>}
           {groups.sinfecha.length > 0 && <><div className="ts-agenda-h">Sin fecha</div>{groups.sinfecha.map(TaskRow)}</>}
         </div>
       ) : (
         <>
+          <div className="ts-searchbar">
+            <span className="ts-search-icon">🔎</span>
+            <input className="ts-search-input" placeholder="Buscar por nombre, teléfono, fecha de fiesta o reunión…"
+              value={query} onChange={(e) => setQuery(e.target.value)} />
+            {query && <button className="ts-search-clear" onClick={() => setQuery("")} aria-label="Limpiar búsqueda">✕</button>}
+          </div>
           <div className="ts-pillbar">
             <button className={filter === "todos" ? "ts-pill on" : "ts-pill"} onClick={() => setFilter("todos")}>Todos</button>
             {STATUSES.map((s) => (
@@ -273,12 +340,13 @@ function Dashboard({ clients, onOpen, onAdd, onSave, onLogout }) {
           </div>
           <div className="ts-grid">
             {sorted.map((c) => (
-              <button key={c.id} className="ts-card" onClick={() => onOpen(c.id)}>
+              <SpotlightCard key={c.id} className="ts-lead-card" spotlightColor="rgba(255,255,255,0.22)" onClick={() => onOpen(c.id)}>
                 <div className="ts-card-top">
                   <span className="ts-card-type">{c.eventType}</span>
                   {c.example && <span className="ts-tag-ej">ejemplo</span>}
                 </div>
                 <div className="ts-card-name">{c.name}</div>
+                {c.fechaFiesta && <div className="ts-card-fiesta">🎉 Fiesta: {prettyDate(c.fechaFiesta)}</div>}
                 <div className="ts-card-ctx">{c.context ? c.context.slice(0, 110) : "Sin notas todavía"}{c.context && c.context.length > 110 ? "…" : ""}</div>
                 <div className="ts-card-foot">
                   <span className="ts-status-chip" style={{ color: statusMeta(c.status).color }}>
@@ -286,9 +354,9 @@ function Dashboard({ clients, onOpen, onAdd, onSave, onLogout }) {
                     {statusMeta(c.status).label}
                   </span>
                 </div>
-              </button>
+              </SpotlightCard>
             ))}
-            {sorted.length === 0 && <div className="ts-empty">No hay fichas en este estado.</div>}
+            {sorted.length === 0 && <div className="ts-empty">{query ? "No se encontraron fichas con esa búsqueda." : "No hay fichas en este estado."}</div>}
           </div>
         </>
       )}
@@ -301,12 +369,30 @@ function AddModal({ onClose, onCreate }) {
   const [mode, setMode] = useState("pegar");
   const [paste, setPaste] = useState("");
   const [parsing, setParsing] = useState(false);
-  const [form, setForm] = useState({ name: "", eventType: "Quince", phone: "", meetingDate: "", context: "" });
+  const [docUrl, setDocUrl] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [docError, setDocError] = useState("");
+  const [form, setForm] = useState({ name: "", celebrante: "", eventType: "Quince", phone: "", meetingDate: "", fechaFiesta: "", context: "" });
+
+  const importDoc = async () => {
+    if (!docUrl.trim() || importing) return;
+    setImporting(true); setDocError("");
+    try {
+      const text = await fetchGoogleDoc(docUrl.trim());
+      if (!text) { setDocError("El documento vino vacío."); return; }
+      setPaste((prev) => (prev.trim() ? prev + "\n\n———\n\n" + text : text));
+      setDocUrl("");
+    } catch (e) {
+      setDocError(e.message || "No se pudo traer el documento.");
+    } finally {
+      setImporting(false);
+    }
+  };
 
   const build = (extra = {}) => ({
-    id: "c-" + Date.now(), name: "", eventType: "Quince", phone: "", meetingDate: "",
-    context: "", status: "nuevo", chat: [], whatsapp: "", reminder: emptyReminder(), tasks: [],
-    createdAt: Date.now(), updatedAt: Date.now(), ...extra,
+    id: "c-" + Date.now(), name: "", celebrante: "", eventType: "Quince", phone: "",
+    meetingDate: "", fechaFiesta: "", context: "", status: "nuevo", chat: [], whatsapp: "",
+    reminder: emptyReminder(), tasks: [], createdAt: Date.now(), updatedAt: Date.now(), ...extra,
   });
 
   const handleParse = async () => {
@@ -315,13 +401,32 @@ function AddModal({ onClose, onCreate }) {
     try {
       const out = await callGemini([{
         role: "user",
-        content: `Extraé los datos y devolvé SOLO un JSON válido, sin markdown, con esta forma: {"name": string, "eventType": "Quince"|"Boda"|"Book"|"Otro", "phone": string, "context": string}. Si un dato no está, string vacío. "context" es un resumen limpio.\n\nNota:\n${paste}`,
+        content: `Hoy es ${todayISO()}. Extraé los datos de la nota/transcripción y devolvé SOLO un JSON válido, sin markdown, con esta forma exacta:
+{"name": string, "celebrante": string, "eventType": ${EVENT_TYPES.map((t) => `"${t}"`).join("|")}, "phone": string, "meetingDate": string, "fechaFiesta": string, "context": string}
+
+Reglas:
+- "name": nombre del cliente / persona de contacto.
+- "eventType": elegí la categoría que mejor encaje de la lista. Un cumpleaños de 50 (o cualquier edad que no sea 15 ni 18) es "Cumpleaños". Una producción de fotos es "Book". Si ninguna encaja, "Otro".
+- "celebrante": nombre del/la festejado/a (la quinceañera, los novios, la homenajeada). Si es el mismo que el cliente, repetilo.
+- "phone": solo dígitos si aparece, si no string vacío.
+- "meetingDate": fecha de la reunión en formato YYYY-MM-DD. Convertí formatos como DD/MM/YYYY. Si no aparece, string vacío.
+- "fechaFiesta": fecha del evento/fiesta en formato YYYY-MM-DD (convertí DD/MM/YYYY). Si no aparece, string vacío.
+- "context": resumen limpio y breve de la reunión (objeciones, intereses, presupuesto, próximos pasos).
+Si un dato no está, string vacío.
+
+Nota:
+${paste}`,
       }]);
       const parsed = JSON.parse(out.replace(/```json|```/g, "").trim());
+      const isISO = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
       onCreate(build({
         name: parsed.name || "Sin nombre",
+        celebrante: parsed.celebrante || "",
         eventType: EVENT_TYPES.includes(parsed.eventType) ? parsed.eventType : "Otro",
-        phone: parsed.phone || "", context: parsed.context || paste,
+        phone: parsed.phone || "",
+        meetingDate: isISO(parsed.meetingDate) ? parsed.meetingDate : "",
+        fechaFiesta: isISO(parsed.fechaFiesta) ? parsed.fechaFiesta : "",
+        context: parsed.context || paste,
       }));
     } catch { onCreate(build({ name: "Sin nombre", context: paste })); }
     finally { setParsing(false); }
@@ -340,7 +445,18 @@ function AddModal({ onClose, onCreate }) {
         </div>
         {mode === "pegar" ? (
           <div className="ts-modal-body">
-            <label className="ts-label">Pegá tu nota de la reunión — la IA arma la ficha sola</label>
+            <label className="ts-label">Traer desde Google Docs (opcional)</label>
+            <div className="ts-doc-row">
+              <input className="ts-input" placeholder="Pegá el link del Google Doc…"
+                value={docUrl} onChange={(e) => setDocUrl(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); importDoc(); } }} />
+              <button className="ts-btn-ghost" onClick={importDoc} disabled={importing || !docUrl.trim()}>
+                {importing ? "Trayendo…" : "Traer texto"}
+              </button>
+            </div>
+            {docError && <div className="ts-login-error">{docError}</div>}
+
+            <label className="ts-label" style={{ marginTop: 16 }}>Pegá tu nota de la reunión — la IA arma la ficha sola</label>
             <textarea className="ts-textarea" rows={7}
               placeholder="Ej: Mariana, quince, 11-5555-5555. La vi por videollamada, le encantó el book, duda con el valor…"
               value={paste} onChange={(e) => setPaste(e.target.value)} />
@@ -364,8 +480,18 @@ function AddModal({ onClose, onCreate }) {
                 <input className="ts-input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
               </div>
             </div>
-            <label className="ts-label">Fecha de reunión</label>
-            <input className="ts-input" type="date" value={form.meetingDate} onChange={(e) => setForm({ ...form, meetingDate: e.target.value })} />
+            <label className="ts-label">{celebranteLabel(form.eventType)} (nombre)</label>
+            <input className="ts-input" value={form.celebrante} onChange={(e) => setForm({ ...form, celebrante: e.target.value })} />
+            <div className="ts-row">
+              <div style={{ flex: 1 }}>
+                <label className="ts-label">Fecha de reunión</label>
+                <input className="ts-input" type="date" value={form.meetingDate} onChange={(e) => setForm({ ...form, meetingDate: e.target.value })} />
+              </div>
+              <div style={{ flex: 1 }}>
+                <label className="ts-label">Fecha de fiesta</label>
+                <input className="ts-input" type="date" value={form.fechaFiesta} onChange={(e) => setForm({ ...form, fechaFiesta: e.target.value })} />
+              </div>
+            </div>
             <label className="ts-label">Notas de la reunión</label>
             <textarea className="ts-textarea" rows={4} value={form.context} onChange={(e) => setForm({ ...form, context: e.target.value })} />
             <button className="ts-btn-primary full" onClick={() => onCreate(build(form))} disabled={!form.name.trim()}>Crear ficha</button>
@@ -478,14 +604,21 @@ function Detail({ client, onBack, onSave, onDelete }) {
             ))}
           </div>
 
-          <div className="ts-row" style={{ marginTop: 18 }}>
+          <label className="ts-label" style={{ marginTop: 18 }}>{celebranteLabel(c.eventType)} (nombre)</label>
+          <input className="ts-input" value={c.celebrante || ""} placeholder="Nombre del/la festejado/a" onChange={(e) => persist({ ...c, celebrante: e.target.value })} />
+
+          <div className="ts-row" style={{ marginTop: 6 }}>
             <div style={{ flex: 1 }}>
               <label className="ts-label">Teléfono</label>
-              <input className="ts-input" value={c.phone} onChange={(e) => persist({ ...c, phone: e.target.value })} />
+              <input className="ts-input" value={c.phone || ""} onChange={(e) => persist({ ...c, phone: e.target.value })} />
             </div>
             <div style={{ flex: 1 }}>
-              <label className="ts-label">Reunión</label>
-              <input className="ts-input" type="date" value={c.meetingDate} onChange={(e) => persist({ ...c, meetingDate: e.target.value })} />
+              <label className="ts-label">Fecha de reunión</label>
+              <input className="ts-input" type="date" value={c.meetingDate || ""} onChange={(e) => persist({ ...c, meetingDate: e.target.value })} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <label className="ts-label">Fecha de fiesta</label>
+              <input className="ts-input" type="date" value={c.fechaFiesta || ""} onChange={(e) => persist({ ...c, fechaFiesta: e.target.value })} />
             </div>
           </div>
 
@@ -624,9 +757,12 @@ const CSS = `
 .ts-header-actions{display:flex;gap:10px;align-items:center}
 
 /* ---- login ---- */
-.ts-login{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px}
-.ts-login-card{width:100%;max-width:400px;background:var(--surface);border:1px solid var(--line-soft);
-  border-radius:var(--r);padding:38px 34px;box-shadow:var(--shadow);display:flex;flex-direction:column}
+.ts-login{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;overflow:hidden}
+.ts-login-bg{position:absolute;inset:0;z-index:0}
+.ts-login-card{position:relative;z-index:1;width:100%;max-width:400px;background:rgba(255,255,255,.86);
+  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.5);
+  border-radius:var(--r);padding:38px 34px;box-shadow:0 20px 60px rgba(28,26,23,.28);display:flex;flex-direction:column}
+.ts-login-submit{width:100%;margin-top:16px}
 .ts-login-mark{text-align:center;margin-bottom:22px}
 .ts-login-card .ts-eyebrow{text-align:center}
 .ts-login-title{font-family:'Poppins',sans-serif;font-weight:700;font-size:30px;line-height:1.05;
@@ -647,11 +783,22 @@ const CSS = `
 .ts-pill:hover{border-color:var(--gold)}
 .ts-pill.on{background:var(--ink);color:#F4F1EA;border-color:var(--ink)}
 
+/* ---- buscador ---- */
+.ts-searchbar{max-width:560px;margin:0 auto 16px;display:flex;align-items:center;gap:10px;
+  background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:10px 18px;box-shadow:var(--shadow)}
+.ts-searchbar:focus-within{border-color:var(--gold)}
+.ts-search-icon{font-size:15px;opacity:.7}
+.ts-search-input{flex:1;border:none;background:none;outline:none;font:inherit;font-size:14px;color:var(--ink)}
+.ts-search-clear{border:none;background:var(--bg);color:var(--ink-soft);width:24px;height:24px;border-radius:999px;cursor:pointer;font-size:12px;flex:none}
+.ts-search-clear:hover{background:var(--line)}
+.ts-card-fiesta{font-size:12px;color:var(--gold-deep);font-weight:600;margin-top:-4px}
+
 /* ---- agenda ---- */
 .ts-agenda{max-width:720px;margin:0 auto}
 .ts-agenda-h{font-family:'Poppins',sans-serif;font-weight:600;font-size:13px;letter-spacing:.06em;
   text-transform:uppercase;color:var(--ink-soft);margin:26px 0 12px}
 .ts-agenda-h.hoy{color:var(--gold-deep)}
+.ts-agenda-h.atrasada{color:#C05656}
 .ts-task{display:flex;align-items:flex-start;gap:14px;background:var(--surface);border:1px solid var(--line-soft);
   border-radius:var(--r);padding:16px 18px;margin-bottom:10px;box-shadow:var(--shadow);transition:box-shadow .2s}
 .ts-task:hover{box-shadow:var(--shadow-hover)}
@@ -684,6 +831,17 @@ const CSS = `
 .ts-tag-ej{color:var(--gold-deep);background:#F6EFDD;border-radius:999px;padding:3px 9px;font-size:9px;letter-spacing:.1em;text-transform:uppercase;font-weight:600}
 .ts-empty{color:var(--ink-soft);padding:44px;text-align:center;border:1px dashed var(--line);border-radius:var(--r);background:var(--surface)}
 
+/* ---- ficha oscura (SpotlightCard) ---- */
+.ts-root .ts-lead-card{text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:12px;min-height:200px;
+  padding:24px;border-radius:var(--r);background:#18161B;border:1px solid #2c2a26;
+  box-shadow:0 6px 24px rgba(0,0,0,.18);transition:transform .2s,box-shadow .2s}
+.ts-root .ts-lead-card:hover{transform:translateY(-4px);box-shadow:0 14px 40px rgba(0,0,0,.30)}
+.ts-lead-card .ts-card-name{color:#F6F2E9}
+.ts-lead-card .ts-card-ctx{color:#A8A093}
+.ts-lead-card .ts-card-type{color:#E8C979}
+.ts-lead-card .ts-card-foot{border-top-color:rgba(255,255,255,.10)}
+.ts-lead-card .ts-tag-ej{color:#E8C979;background:rgba(232,201,121,.14)}
+
 .ts-label{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);font-weight:600;margin:0 0 8px}
 .ts-input,.ts-textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);
   color:var(--ink);font:inherit;font-size:14px;padding:12px 14px;margin-bottom:6px;outline:none;transition:border-color .18s}
@@ -706,6 +864,9 @@ const CSS = `
 .ts-modal .ts-seg{margin:16px 26px 0;display:flex}
 .ts-modal .ts-seg-btn{flex:1;text-align:center}
 .ts-modal-body{padding:18px 26px 26px}
+.ts-doc-row{display:flex;gap:10px;align-items:flex-start}
+.ts-doc-row .ts-input{flex:1;margin-bottom:0}
+.ts-doc-row .ts-btn-ghost{white-space:nowrap}
 
 .ts-detail{max-width:1180px;margin:0 auto;padding:28px 30px 70px}
 .ts-detail-bar{display:flex;justify-content:space-between;align-items:center;margin-bottom:22px}
