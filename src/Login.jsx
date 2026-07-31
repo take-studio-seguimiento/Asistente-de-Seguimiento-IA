@@ -75,9 +75,12 @@ export default function Login() {
           tint="#1C1A17"
           tintOpacity={1}
           textColor="#F4F1EA"
-          lineColor="#E8C979"
-          baseColor="#4a4034"
-          proximity={320}
+          lineColor="#F5DE97"
+          baseColor="#6a5a33"
+          intensity={1.7}
+          shineSize={16}
+          autoAnimate={!(busy || !email || !password)}
+          proximity={360}
           disabled={busy || !email || !password}
         >
           {busy ? "Entrando…" : "Entrar"}

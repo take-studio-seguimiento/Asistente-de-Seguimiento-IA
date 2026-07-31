@@ -11,6 +11,7 @@ import { onAuth, logout } from "./auth";
 import Login from "./Login";
 import SpecularButton from "./SpecularButton";
 import SpotlightCard from "./SpotlightCard";
+import { IconSearch, IconX, IconPlus, IconCalendar, IconCheck, IconSparkle, IconChevronDown, IconChevronUp } from "./icons";
 
 // ============================================================
 // Take Studio — Seguimiento de Clientes (Prototipo v3)
@@ -284,9 +285,9 @@ function Dashboard({ clients, onOpen, onAdd, onSave, onLogout }) {
           <span className="ts-task-type">{c.eventType}</span>
         </div>
         <div className="ts-task-text">{c.reminder.text}</div>
-        <div className="ts-task-when">🗓 {prettyDate(c.reminder.date, c.reminder.time)}</div>
+        <div className="ts-task-when"><IconCalendar /> {prettyDate(c.reminder.date, c.reminder.time)}</div>
       </div>
-      <a className="ts-task-cal" href={gcalUrl(c)} target="_blank" rel="noreferrer" title="Agendar en Google Calendar">＋</a>
+      <a className="ts-task-cal" href={gcalUrl(c)} target="_blank" rel="noreferrer" title="Agendar en Google Calendar"><IconCalendar /></a>
     </div>
   );
 
@@ -297,8 +298,10 @@ function Dashboard({ clients, onOpen, onAdd, onSave, onLogout }) {
         <div className="ts-header-actions">
           <button className="ts-btn-ghost" onClick={onLogout}>Salir</button>
           <SpecularButton size="sm" radius={999} tint="#1C1A17" tintOpacity={1}
-            textColor="#F4F1EA" lineColor="#E8C979" baseColor="#4a4034" proximity={260}
-            onClick={onAdd}>+ Nuevo cliente</SpecularButton>
+            textColor="#F4F1EA" lineColor="#F5DE97" baseColor="#6a5a33" intensity={1.6}
+            shineSize={16} autoAnimate proximity={280} onClick={onAdd}>
+            <span className="ts-btn-ic"><IconPlus /> Nuevo cliente</span>
+          </SpecularButton>
         </div>
       </header>
 
@@ -327,10 +330,10 @@ function Dashboard({ clients, onOpen, onAdd, onSave, onLogout }) {
       ) : (
         <>
           <div className="ts-searchbar">
-            <span className="ts-search-icon">🔎</span>
+            <span className="ts-search-icon"><IconSearch /></span>
             <input className="ts-search-input" placeholder="Buscar por nombre, teléfono, fecha de fiesta o reunión…"
               value={query} onChange={(e) => setQuery(e.target.value)} />
-            {query && <button className="ts-search-clear" onClick={() => setQuery("")} aria-label="Limpiar búsqueda">✕</button>}
+            {query && <button className="ts-search-clear" onClick={() => setQuery("")} aria-label="Limpiar búsqueda"><IconX /></button>}
           </div>
           <div className="ts-pillbar">
             <button className={filter === "todos" ? "ts-pill on" : "ts-pill"} onClick={() => setFilter("todos")}>Todos</button>
@@ -346,7 +349,7 @@ function Dashboard({ clients, onOpen, onAdd, onSave, onLogout }) {
                   {c.example && <span className="ts-tag-ej">ejemplo</span>}
                 </div>
                 <div className="ts-card-name">{c.name}</div>
-                {c.fechaFiesta && <div className="ts-card-fiesta">🎉 Fiesta: {prettyDate(c.fechaFiesta)}</div>}
+                {c.fechaFiesta && <div className="ts-card-fiesta"><IconSparkle /> Fiesta: {prettyDate(c.fechaFiesta)}</div>}
                 <div className="ts-card-ctx">{c.context ? c.context.slice(0, 110) : "Sin notas todavía"}{c.context && c.context.length > 110 ? "…" : ""}</div>
                 <div className="ts-card-foot">
                   <span className="ts-status-chip" style={{ color: statusMeta(c.status).color }}>
@@ -437,7 +440,7 @@ ${paste}`,
       <div className="ts-modal" onClick={(e) => e.stopPropagation()}>
         <div className="ts-modal-head">
           <h2>Nuevo cliente</h2>
-          <button className="ts-x" onClick={onClose}>✕</button>
+          <button className="ts-x" onClick={onClose} aria-label="Cerrar"><IconX /></button>
         </div>
         <div className="ts-seg">
           <button className={mode === "pegar" ? "ts-seg-btn on" : "ts-seg-btn"} onClick={() => setMode("pegar")}>Pegar nota</button>
@@ -643,15 +646,15 @@ function Detail({ client, onBack, onSave, onDelete }) {
           </div>
           {c.reminder.text && (
             <div className="ts-task-actions">
-              <a className="ts-btn-ghost" href={gcalUrl(c)} target="_blank" rel="noreferrer">📅 Agendar en Google Calendar</a>
-              <button className="ts-btn-ghost" onClick={completeReminder}>✓ Marcar completada</button>
+              <a className="ts-btn-ghost" href={gcalUrl(c)} target="_blank" rel="noreferrer"><IconCalendar /> Agendar en Google Calendar</a>
+              <button className="ts-btn-ghost" onClick={completeReminder}><IconCheck /> Marcar completada</button>
             </div>
           )}
 
           {/* HISTORIAL DE TAREAS */}
           <div className="ts-wa-head ts-hist-head" onClick={() => setShowHistory((v) => !v)} role="button">
             <span>Historial de tareas{completadas.length ? ` (${completadas.length})` : ""}</span>
-            <span className="ts-hist-arrow">{showHistory ? "▲ Ocultar" : "▼ Ver"}</span>
+            <span className="ts-hist-arrow">{showHistory ? <IconChevronUp /> : <IconChevronDown />}</span>
           </div>
           {showHistory && (
             <div className="ts-hist">
@@ -665,16 +668,18 @@ function Detail({ client, onBack, onSave, onDelete }) {
                 histList.map((t, i) => (
                   <div key={t.id || i} className="ts-hist-item">
                     {histView === "completadas" ? (
-                      <div className="ts-hist-check done">✓</div>
+                      <div className="ts-hist-check done"><IconCheck /></div>
                     ) : (
                       <button className="ts-hist-check ts-hist-check-btn" onClick={completeReminder} aria-label="Marcar completada" title="Marcar completada" />
                     )}
                     <div className="ts-hist-body">
                       <div className="ts-hist-text">{t.text}</div>
                       <div className="ts-hist-when">
-                        {histView === "completadas"
-                          ? `✓ Completada ${prettyDate(new Date(t.completedAt).toISOString().slice(0, 10))}${t.date ? ` · era para ${prettyDate(t.date, t.time)}` : ""}`
-                          : `🗓 ${prettyDate(t.date, t.time)}`}
+                        {histView === "completadas" ? (
+                          <><IconCheck /> Completada {prettyDate(new Date(t.completedAt).toISOString().slice(0, 10))}{t.date ? ` · era para ${prettyDate(t.date, t.time)}` : ""}</>
+                        ) : (
+                          <><IconCalendar /> {prettyDate(t.date, t.time)}</>
+                        )}
                       </div>
                     </div>
                   </div>
@@ -732,25 +737,37 @@ const CSS = `
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700&family=Inter:wght@400;500;600&family=Playfair+Display:ital@1&display=swap');
 
 .ts-root{
-  --bg:#F4F1EA; --surface:#FFFFFF; --ink:#1C1A17; --ink-soft:#6B655E;
-  --gold:#C4A155; --gold-deep:#A8863C; --line:#E7E1D6; --line-soft:#EFEAE1;
-  --shadow:0 4px 24px rgba(28,26,23,.06); --shadow-hover:0 10px 34px rgba(28,26,23,.10);
+  --bg:#0E0D12; --surface:#17161C; --glass:rgba(255,255,255,.055); --glass-strong:rgba(255,255,255,.09);
+  --ink:#F1ECE3; --ink-soft:#9C958A;
+  --gold:#D8B45E; --gold-deep:#EAC97C;
+  --line:rgba(255,255,255,.10); --line-soft:rgba(255,255,255,.06); --input-bg:rgba(255,255,255,.04);
+  --shadow:0 8px 30px rgba(0,0,0,.35); --shadow-hover:0 18px 50px rgba(0,0,0,.55);
+  --glow:0 0 0 1px rgba(216,180,94,.55), 0 0 20px rgba(216,180,94,.30);
   --r:18px; --r-sm:12px;
-  font-family:'Inter',system-ui,sans-serif;background:var(--bg);color:var(--ink);min-height:100vh;width:100%;
+  font-family:'Inter',system-ui,sans-serif;background:
+    radial-gradient(1200px 800px at 15% -10%, rgba(216,180,94,.08), transparent 60%),
+    radial-gradient(1000px 700px at 100% 0%, rgba(110,120,160,.06), transparent 55%),
+    var(--bg);
+  background-attachment:fixed;color:var(--ink);min-height:100vh;width:100%;
 }
 .ts-root *{box-sizing:border-box}
 .ts-loading{padding:80px;text-align:center;color:var(--ink-soft)}
 
-.ts-btn-primary{background:var(--ink);color:#F4F1EA;border:none;border-radius:999px;
-  padding:12px 22px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;transition:transform .15s,background .2s;white-space:nowrap}
-.ts-btn-primary:hover{background:#2E2A25;transform:translateY(-1px)}
-.ts-btn-primary:disabled{opacity:.35;cursor:not-allowed;transform:none}
+.ts-btn-primary{position:relative;background:linear-gradient(180deg,rgba(216,180,94,.26),rgba(216,180,94,.10));
+  color:#FBF3DF;border:1px solid rgba(216,180,94,.5);border-radius:999px;
+  padding:12px 22px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);
+  transition:transform .15s,box-shadow .2s,border-color .2s,background .2s}
+.ts-btn-primary:hover{transform:translateY(-1px);border-color:var(--gold);box-shadow:var(--glow);
+  background:linear-gradient(180deg,rgba(216,180,94,.34),rgba(216,180,94,.14))}
+.ts-btn-primary:disabled{opacity:.4;cursor:not-allowed;transform:none;box-shadow:none}
 .ts-btn-primary.full{width:100%;margin-top:16px;padding:14px}
-.ts-btn-ghost{background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:999px;
+.ts-btn-ghost{background:var(--glass);color:var(--ink);border:1px solid var(--line);border-radius:999px;
   padding:11px 18px;font:inherit;font-size:13px;font-weight:600;cursor:pointer;text-decoration:none;
-  display:inline-flex;align-items:center;gap:6px;transition:all .18s}
-.ts-btn-ghost:hover{border-color:var(--gold);color:var(--gold-deep)}
-.ts-btn-ghost:disabled{opacity:.4;cursor:not-allowed}
+  display:inline-flex;align-items:center;gap:7px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:all .18s}
+.ts-btn-ghost:hover{border-color:var(--gold);color:var(--gold-deep);box-shadow:var(--glow)}
+.ts-btn-ghost:disabled{opacity:.4;cursor:not-allowed;box-shadow:none}
+.ts-btn-primary svg,.ts-btn-ghost svg{width:16px;height:16px;flex:none}
 
 .ts-dash{max-width:1120px;margin:0 auto;padding:32px 30px 90px}
 .ts-header{display:flex;justify-content:space-between;align-items:center}
@@ -759,16 +776,17 @@ const CSS = `
 /* ---- login ---- */
 .ts-login{position:relative;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;overflow:hidden}
 .ts-login-bg{position:absolute;inset:0;z-index:0}
-.ts-login-card{position:relative;z-index:1;width:100%;max-width:400px;background:rgba(255,255,255,.86);
-  backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,.5);
-  border-radius:var(--r);padding:38px 34px;box-shadow:0 20px 60px rgba(28,26,23,.28);display:flex;flex-direction:column}
-.ts-login-submit{width:100%;margin-top:16px}
+.ts-login-card{position:relative;z-index:1;width:100%;max-width:400px;background:rgba(18,17,22,.55);
+  backdrop-filter:blur(26px) saturate(1.3);-webkit-backdrop-filter:blur(26px) saturate(1.3);
+  border:1px solid rgba(255,255,255,.14);border-radius:24px;padding:40px 34px;
+  box-shadow:0 24px 70px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.08);display:flex;flex-direction:column}
+.ts-login-submit{width:100%;margin-top:18px}
 .ts-login-mark{text-align:center;margin-bottom:22px}
 .ts-login-card .ts-eyebrow{text-align:center}
 .ts-login-title{font-family:'Poppins',sans-serif;font-weight:700;font-size:30px;line-height:1.05;
   letter-spacing:-.02em;margin:0 0 26px;text-align:center}
 .ts-login-card .ts-label{margin-top:14px}
-.ts-login-error{background:#FBEDED;border:1px solid #E9C9C9;color:#A44;border-radius:var(--r-sm);
+.ts-login-error{background:rgba(201,138,138,.14);border:1px solid rgba(201,138,138,.4);color:#EBB4B4;border-radius:var(--r-sm);
   padding:10px 13px;font-size:13px;margin:12px 0 2px}
 .ts-wordmark{font-family:'Poppins',sans-serif;font-weight:700;font-size:22px;letter-spacing:.02em;line-height:1}
 .ts-wordmark span{display:block;font-size:9px;font-weight:600;letter-spacing:.42em;color:var(--ink-soft);margin-top:1px}
@@ -778,20 +796,26 @@ const CSS = `
 .ts-ital{font-family:'Playfair Display',serif;font-style:italic;font-weight:400;color:var(--gold-deep)}
 
 .ts-pillbar{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-bottom:30px}
-.ts-pill{background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:9px 18px;
-  font:inherit;font-size:13px;font-weight:500;color:var(--ink-soft);cursor:pointer;transition:all .18s}
-.ts-pill:hover{border-color:var(--gold)}
-.ts-pill.on{background:var(--ink);color:#F4F1EA;border-color:var(--ink)}
+.ts-pill{background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:9px 18px;
+  font:inherit;font-size:13px;font-weight:500;color:var(--ink-soft);cursor:pointer;
+  backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);transition:all .18s}
+.ts-pill:hover{border-color:var(--gold);color:var(--ink);box-shadow:var(--glow)}
+.ts-pill.on{background:linear-gradient(180deg,rgba(216,180,94,.9),rgba(216,180,94,.75));color:#1a1510;border-color:var(--gold);font-weight:600}
 
 /* ---- buscador ---- */
 .ts-searchbar{max-width:560px;margin:0 auto 16px;display:flex;align-items:center;gap:10px;
-  background:var(--surface);border:1px solid var(--line);border-radius:999px;padding:10px 18px;box-shadow:var(--shadow)}
-.ts-searchbar:focus-within{border-color:var(--gold)}
-.ts-search-icon{font-size:15px;opacity:.7}
+  background:var(--glass);border:1px solid var(--line);border-radius:999px;padding:11px 18px;
+  backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:var(--shadow)}
+.ts-searchbar:focus-within{border-color:var(--gold);box-shadow:var(--glow)}
+.ts-search-icon{display:flex;color:var(--ink-soft);flex:none}
+.ts-search-icon svg{width:16px;height:16px}
 .ts-search-input{flex:1;border:none;background:none;outline:none;font:inherit;font-size:14px;color:var(--ink)}
-.ts-search-clear{border:none;background:var(--bg);color:var(--ink-soft);width:24px;height:24px;border-radius:999px;cursor:pointer;font-size:12px;flex:none}
-.ts-search-clear:hover{background:var(--line)}
-.ts-card-fiesta{font-size:12px;color:var(--gold-deep);font-weight:600;margin-top:-4px}
+.ts-search-input::placeholder{color:var(--ink-soft)}
+.ts-search-clear{border:none;background:var(--input-bg);color:var(--ink-soft);width:24px;height:24px;border-radius:999px;cursor:pointer;flex:none;display:flex;align-items:center;justify-content:center}
+.ts-search-clear svg{width:12px;height:12px}
+.ts-search-clear:hover{background:var(--glass-strong);color:var(--ink)}
+.ts-card-fiesta{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--gold-deep);font-weight:600;margin-top:-4px}
+.ts-card-fiesta svg{width:13px;height:13px}
 
 /* ---- agenda ---- */
 .ts-agenda{max-width:720px;margin:0 auto}
@@ -799,22 +823,25 @@ const CSS = `
   text-transform:uppercase;color:var(--ink-soft);margin:26px 0 12px}
 .ts-agenda-h.hoy{color:var(--gold-deep)}
 .ts-agenda-h.atrasada{color:#C05656}
-.ts-task{display:flex;align-items:flex-start;gap:14px;background:var(--surface);border:1px solid var(--line-soft);
-  border-radius:var(--r);padding:16px 18px;margin-bottom:10px;box-shadow:var(--shadow);transition:box-shadow .2s}
-.ts-task:hover{box-shadow:var(--shadow-hover)}
+.ts-task{display:flex;align-items:flex-start;gap:14px;background:var(--glass);border:1px solid var(--line);
+  border-radius:var(--r);padding:16px 18px;margin-bottom:10px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+  box-shadow:var(--shadow);transition:box-shadow .2s,border-color .2s}
+.ts-task:hover{box-shadow:var(--shadow-hover);border-color:rgba(216,180,94,.4)}
 .ts-check{flex:none;width:20px;height:20px;margin-top:2px;border-radius:50%;border:2px solid var(--line);
-  background:var(--surface);cursor:pointer;transition:all .18s}
-.ts-check:hover{border-color:var(--gold);background:#F6EFDD}
+  background:var(--input-bg);cursor:pointer;transition:all .18s}
+.ts-check:hover{border-color:var(--gold);background:rgba(216,180,94,.18);box-shadow:var(--glow)}
 .ts-task-body{flex:1;cursor:pointer;min-width:0}
 .ts-task-head{display:flex;align-items:center;gap:10px;margin-bottom:4px}
 .ts-task-name{font-family:'Poppins',sans-serif;font-weight:600;font-size:16px}
 .ts-task-type{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-deep);font-weight:600}
 .ts-task-text{color:var(--ink-soft);font-size:13.5px;line-height:1.55;margin-bottom:6px}
-.ts-task-when{font-size:12px;color:var(--ink);font-weight:500}
-.ts-task-cal{flex:none;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);
-  display:flex;align-items:center;justify-content:center;color:var(--ink-soft);font-size:18px;
+.ts-task-when{display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--ink);font-weight:500}
+.ts-task-when svg{width:13px;height:13px;color:var(--ink-soft)}
+.ts-task-cal{flex:none;width:34px;height:34px;border-radius:50%;border:1px solid var(--line);background:var(--input-bg);
+  display:flex;align-items:center;justify-content:center;color:var(--ink-soft);
   text-decoration:none;transition:all .18s}
-.ts-task-cal:hover{border-color:var(--gold);color:var(--gold-deep);background:#F6EFDD}
+.ts-task-cal svg{width:16px;height:16px}
+.ts-task-cal:hover{border-color:var(--gold);color:var(--gold-deep);box-shadow:var(--glow)}
 
 .ts-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(270px,1fr));gap:20px}
 .ts-card{text-align:left;background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--r);
@@ -828,39 +855,46 @@ const CSS = `
 .ts-card-foot{padding-top:14px;border-top:1px solid var(--line-soft)}
 .ts-status-chip{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:600}
 .ts-dot{width:8px;height:8px;border-radius:50%;display:inline-block}
-.ts-tag-ej{color:var(--gold-deep);background:#F6EFDD;border-radius:999px;padding:3px 9px;font-size:9px;letter-spacing:.1em;text-transform:uppercase;font-weight:600}
-.ts-empty{color:var(--ink-soft);padding:44px;text-align:center;border:1px dashed var(--line);border-radius:var(--r);background:var(--surface)}
+.ts-tag-ej{color:var(--gold-deep);background:rgba(232,201,121,.14);border-radius:999px;padding:3px 9px;font-size:9px;letter-spacing:.1em;text-transform:uppercase;font-weight:600}
+.ts-empty{color:var(--ink-soft);padding:44px;text-align:center;border:1px dashed var(--line);border-radius:var(--r);background:var(--glass)}
 
-/* ---- ficha oscura (SpotlightCard) ---- */
+/* ---- ficha (SpotlightCard glass) ---- */
 .ts-root .ts-lead-card{text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:12px;min-height:200px;
-  padding:24px;border-radius:var(--r);background:#18161B;border:1px solid #2c2a26;
-  box-shadow:0 6px 24px rgba(0,0,0,.18);transition:transform .2s,box-shadow .2s}
-.ts-root .ts-lead-card:hover{transform:translateY(-4px);box-shadow:0 14px 40px rgba(0,0,0,.30)}
-.ts-lead-card .ts-card-name{color:#F6F2E9}
-.ts-lead-card .ts-card-ctx{color:#A8A093}
-.ts-lead-card .ts-card-type{color:#E8C979}
-.ts-lead-card .ts-card-foot{border-top-color:rgba(255,255,255,.10)}
-.ts-lead-card .ts-tag-ej{color:#E8C979;background:rgba(232,201,121,.14)}
+  padding:24px;border-radius:var(--r);background:var(--glass);border:1px solid var(--line);
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  box-shadow:var(--shadow);transition:transform .2s,box-shadow .2s,border-color .2s}
+.ts-root .ts-lead-card:hover{transform:translateY(-4px);box-shadow:var(--shadow-hover);border-color:rgba(216,180,94,.35)}
+.ts-lead-card .ts-card-name{color:var(--ink)}
+.ts-lead-card .ts-card-ctx{color:var(--ink-soft)}
+.ts-lead-card .ts-card-type{color:var(--gold-deep)}
+.ts-lead-card .ts-card-foot{border-top-color:var(--line)}
+.ts-lead-card .ts-tag-ej{color:var(--gold-deep);background:rgba(232,201,121,.14)}
 
 .ts-label{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);font-weight:600;margin:0 0 8px}
-.ts-input,.ts-textarea{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:var(--r-sm);
-  color:var(--ink);font:inherit;font-size:14px;padding:12px 14px;margin-bottom:6px;outline:none;transition:border-color .18s}
-.ts-input:focus,.ts-textarea:focus{border-color:var(--gold);background:var(--surface)}
+.ts-input,.ts-textarea{width:100%;background:var(--input-bg);border:1px solid var(--line);border-radius:var(--r-sm);
+  color:var(--ink);font:inherit;font-size:14px;padding:12px 14px;margin-bottom:6px;outline:none;transition:border-color .18s,box-shadow .18s}
+.ts-input::placeholder,.ts-textarea::placeholder{color:var(--ink-soft)}
+.ts-input:focus,.ts-textarea:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(216,180,94,.14)}
+.ts-input[type=date],.ts-input[type=time]{color-scheme:dark}
 .ts-textarea{resize:vertical;line-height:1.6}
 .ts-row{display:flex;gap:14px}
 
-.ts-seg{display:inline-flex;gap:4px;background:var(--bg);border:1px solid var(--line);border-radius:999px;padding:4px;margin:14px 0}
+.ts-seg{display:inline-flex;gap:4px;background:var(--input-bg);border:1px solid var(--line);border-radius:999px;padding:4px;margin:14px 0}
 .ts-seg.center{display:flex;width:max-content;margin:0 auto 30px}
 .ts-seg.wrap{display:flex;flex-wrap:wrap;border-radius:16px}
-.ts-seg-btn{background:transparent;border:none;border-radius:999px;padding:8px 18px;font:inherit;font-size:13px;font-weight:500;color:var(--ink-soft);cursor:pointer;transition:all .18s}
-.ts-seg-btn.on{background:var(--ink);color:#F4F1EA}
+.ts-seg-btn{background:transparent;border:1px solid transparent;border-radius:999px;padding:8px 18px;font:inherit;font-size:13px;font-weight:500;color:var(--ink-soft);cursor:pointer;transition:all .18s}
+.ts-seg-btn:hover{color:var(--ink);border-color:var(--line)}
+.ts-seg-btn.on{background:linear-gradient(180deg,rgba(216,180,94,.9),rgba(216,180,94,.72));color:#1a1510;font-weight:600;box-shadow:0 0 14px rgba(216,180,94,.3)}
 
-.ts-overlay{position:fixed;inset:0;background:rgba(28,26,23,.35);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
-.ts-modal{background:var(--surface);border-radius:var(--r);width:100%;max-width:540px;max-height:90vh;overflow:auto;box-shadow:0 20px 60px rgba(28,26,23,.2)}
+.ts-overlay{position:fixed;inset:0;background:rgba(6,6,9,.6);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;padding:20px;z-index:50}
+.ts-modal{background:rgba(23,22,28,.85);backdrop-filter:blur(30px) saturate(1.3);-webkit-backdrop-filter:blur(30px) saturate(1.3);
+  border:1px solid rgba(255,255,255,.12);border-radius:24px;width:100%;max-width:540px;max-height:90vh;overflow:auto;
+  box-shadow:0 30px 80px rgba(0,0,0,.6),inset 0 1px 0 rgba(255,255,255,.08)}
 .ts-modal-head{display:flex;justify-content:space-between;align-items:center;padding:24px 26px 0}
 .ts-modal-head h2{font-family:'Poppins',sans-serif;font-weight:600;font-size:26px;margin:0}
-.ts-x{background:var(--bg);border:none;color:var(--ink-soft);width:32px;height:32px;border-radius:999px;font-size:14px;cursor:pointer}
-.ts-x:hover{background:var(--line)}
+.ts-x{background:var(--input-bg);border:1px solid var(--line);color:var(--ink-soft);width:32px;height:32px;border-radius:999px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+.ts-x svg{width:14px;height:14px}
+.ts-x:hover{background:var(--glass-strong);color:var(--ink)}
 .ts-modal .ts-seg{margin:16px 26px 0;display:flex}
 .ts-modal .ts-seg-btn{flex:1;text-align:center}
 .ts-modal-body{padding:18px 26px 26px}
@@ -875,43 +909,50 @@ const CSS = `
 .ts-del{background:none;border:none;color:var(--ink-soft);font:inherit;font-size:12.5px;cursor:pointer}
 .ts-del:hover{color:#C05656}
 .ts-detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start}
-.ts-panel{background:var(--surface);border:1px solid var(--line-soft);border-radius:var(--r);padding:26px;box-shadow:var(--shadow)}
+.ts-panel{background:var(--glass);border:1px solid var(--line);border-radius:var(--r);padding:26px;
+  backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);box-shadow:var(--shadow)}
 .ts-name-edit{width:100%;background:none;border:none;color:var(--ink);font-family:'Poppins',sans-serif;font-size:40px;font-weight:600;letter-spacing:-.02em;padding:6px 0 14px;margin:6px 0 6px;outline:none;border-bottom:2px solid transparent}
 .ts-name-edit:focus{border-color:var(--gold)}
 .ts-wa-head{display:flex;justify-content:space-between;align-items:center;margin:26px 0 12px;padding-top:22px;border-top:1px solid var(--line-soft)}
 .ts-wa-head span{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-deep);font-weight:600}
 .ts-wa-actions{display:flex;gap:10px;margin-top:12px}
-.ts-wa-empty{color:var(--ink-soft);font-size:13.5px;line-height:1.6;padding:16px;border:1px dashed var(--line);border-radius:var(--r-sm);background:var(--bg)}
+.ts-wa-empty{color:var(--ink-soft);font-size:13.5px;line-height:1.6;padding:16px;border:1px dashed var(--line);border-radius:var(--r-sm);background:var(--input-bg)}
 
 /* ---- historial de tareas ---- */
 .ts-task-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
 .ts-hist-head{cursor:pointer;user-select:none}
 .ts-hist-head:hover .ts-hist-arrow{color:var(--gold-deep)}
-.ts-hist-arrow{font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);font-weight:600}
+.ts-hist-arrow{display:flex;color:var(--ink-soft)}
+.ts-hist-arrow svg{width:18px;height:18px}
+.ts-btn-ic{display:inline-flex;align-items:center;gap:7px}
+.ts-btn-ic svg{width:16px;height:16px}
 .ts-hist{margin-top:4px}
 .ts-hist .ts-seg{display:flex;width:100%;margin:0 0 12px}
 .ts-hist .ts-seg-btn{flex:1;text-align:center}
-.ts-hist-empty{color:var(--ink-soft);font-size:13px;padding:14px;border:1px dashed var(--line);border-radius:var(--r-sm);background:var(--bg);text-align:center}
-.ts-hist-item{display:flex;gap:12px;align-items:flex-start;background:var(--bg);border:1px solid var(--line-soft);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px}
-.ts-hist-check{flex:none;width:20px;height:20px;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;font-size:11px;color:transparent;margin-top:1px}
-.ts-hist-check.done{background:#EAF3E9;border-color:#7FB07A;color:#5C8C57}
-.ts-hist-check-btn{cursor:pointer;background:var(--surface);padding:0;transition:all .18s}
-.ts-hist-check-btn:hover{border-color:var(--gold);background:#F6EFDD}
+.ts-hist-empty{color:var(--ink-soft);font-size:13px;padding:14px;border:1px dashed var(--line);border-radius:var(--r-sm);background:var(--input-bg);text-align:center}
+.ts-hist-item{display:flex;gap:12px;align-items:flex-start;background:var(--input-bg);border:1px solid var(--line);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px}
+.ts-hist-check{flex:none;width:20px;height:20px;border-radius:50%;border:2px solid var(--line);display:flex;align-items:center;justify-content:center;color:transparent;margin-top:1px}
+.ts-hist-check svg{width:12px;height:12px}
+.ts-hist-check.done{background:rgba(127,176,122,.2);border-color:#7FB07A;color:#8FCB88}
+.ts-hist-check-btn{cursor:pointer;background:var(--input-bg);padding:0;transition:all .18s}
+.ts-hist-check-btn:hover{border-color:var(--gold);background:rgba(216,180,94,.18);box-shadow:var(--glow)}
 .ts-hist-body{flex:1;min-width:0}
 .ts-hist-text{font-size:13.5px;line-height:1.5;color:var(--ink)}
-.ts-hist-when{font-size:11.5px;color:var(--ink-soft);margin-top:4px}
+.ts-hist-when{display:inline-flex;align-items:center;gap:5px;font-size:11.5px;color:var(--ink-soft);margin-top:4px}
+.ts-hist-when svg{width:12px;height:12px;flex:none}
 
 .ts-chat-panel{display:flex;flex-direction:column;height:720px}
 .ts-chat-title{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-deep);font-weight:600;padding-bottom:16px;border-bottom:1px solid var(--line-soft);margin-bottom:16px}
 .ts-chat-scroll{flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding-right:4px}
 .ts-chat-start{color:var(--ink-soft);font-size:14px;line-height:1.6;text-align:center;margin:auto;max-width:300px;display:flex;flex-direction:column;gap:18px;align-items:center}
 .ts-msg{max-width:86%;padding:12px 16px;border-radius:16px;font-size:14px;line-height:1.6;white-space:pre-wrap}
-.ts-msg.user{align-self:flex-end;background:var(--ink);color:#F4F1EA;border-bottom-right-radius:5px}
-.ts-msg.bot{align-self:flex-start;background:var(--bg);border:1px solid var(--line-soft);color:var(--ink);border-bottom-left-radius:5px}
+.ts-msg.user{align-self:flex-end;background:linear-gradient(180deg,rgba(216,180,94,.22),rgba(216,180,94,.12));border:1px solid rgba(216,180,94,.3);color:var(--ink);border-bottom-right-radius:5px}
+.ts-msg.bot{align-self:flex-start;background:var(--input-bg);border:1px solid var(--line);color:var(--ink);border-bottom-left-radius:5px}
 .ts-typing{color:var(--ink-soft);font-style:italic}
 .ts-chat-input{display:flex;gap:10px;margin-top:16px;padding-top:16px;border-top:1px solid var(--line-soft)}
-.ts-chat-input textarea{flex:1;background:var(--bg);border:1px solid var(--line);border-radius:14px;color:var(--ink);font:inherit;font-size:14px;padding:11px 14px;resize:none;outline:none;line-height:1.5}
-.ts-chat-input textarea:focus{border-color:var(--gold);background:var(--surface)}
+.ts-chat-input textarea{flex:1;background:var(--input-bg);border:1px solid var(--line);border-radius:14px;color:var(--ink);font:inherit;font-size:14px;padding:11px 14px;resize:none;outline:none;line-height:1.5}
+.ts-chat-input textarea::placeholder{color:var(--ink-soft)}
+.ts-chat-input textarea:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(216,180,94,.14)}
 
 @media(max-width:820px){.ts-detail-grid{grid-template-columns:1fr}.ts-chat-panel{height:520px}}
 `;
