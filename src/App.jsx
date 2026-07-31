@@ -621,10 +621,14 @@ function Detail({ client, onBack, onSave, onDelete }) {
   const [copied, setCopied] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [histView, setHistView] = useState("completadas"); // completadas | pendientes
-  const chatEnd = useRef(null);
+  const chatScrollRef = useRef(null);
 
   useEffect(() => setC({ ...client, reminder: client.reminder || emptyReminder() }), [client.id]);
-  useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [c.chat, thinking]);
+  // Auto-scroll SOLO dentro del recuadro del chat (sin mover la página).
+  useEffect(() => {
+    const el = chatScrollRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [c.chat, thinking]);
 
   // Esc vuelve al tablero (si no estás escribiendo en un campo).
   useEffect(() => {
@@ -832,7 +836,7 @@ function Detail({ client, onBack, onSave, onDelete }) {
         {/* DERECHA: chat */}
         <div className="ts-panel ts-chat-panel">
           <div className="ts-chat-title">Asistente de seguimiento</div>
-          <div className="ts-chat-scroll">
+          <div className="ts-chat-scroll" ref={chatScrollRef}>
             {c.chat.length === 0 && !thinking && (
               <div className="ts-chat-start">
                 <p>Pedile una estrategia o escribile directo lo que quieras trabajar con {c.name}.</p>
@@ -841,7 +845,6 @@ function Detail({ client, onBack, onSave, onDelete }) {
             )}
             {c.chat.map((m, i) => <div key={i} className={m.role === "user" ? "ts-msg user" : "ts-msg bot"}>{m.content}</div>)}
             {thinking && <div className="ts-msg bot ts-typing">escribiendo…</div>}
-            <div ref={chatEnd} />
           </div>
           <div className="ts-chat-input">
             <textarea rows={2} placeholder="Escribí acá…" value={input}
