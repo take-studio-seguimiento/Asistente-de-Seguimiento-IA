@@ -1,14 +1,17 @@
 import React, { useState } from "react";
-import { login, authErrorMessage } from "./auth";
+import { login, signup, authErrorMessage } from "./auth";
 import Grainient from "./Grainient";
 import SpecularButton from "./SpecularButton";
 
-// Pantalla de login. Se muestra mientras no haya sesión iniciada.
+// Pantalla de login / registro. Se muestra mientras no haya sesión.
 export default function Login() {
+  const [mode, setMode] = useState("login"); // login | signup
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  const isSignup = mode === "signup";
 
   const submit = async (e) => {
     e.preventDefault();
@@ -16,13 +19,23 @@ export default function Login() {
     setError("");
     setBusy(true);
     try {
-      await login(email, password);
-      // El listener de sesión en App se encarga de mostrar la app.
+      if (isSignup) {
+        await signup(email, password);
+        // Firebase inicia sesión con la cuenta nueva; App crea el perfil
+        // pendiente y muestra la pantalla "cuenta pendiente".
+      } else {
+        await login(email, password);
+      }
     } catch (err) {
       setError(authErrorMessage(err?.code));
     } finally {
       setBusy(false);
     }
+  };
+
+  const switchMode = () => {
+    setError("");
+    setMode(isSignup ? "login" : "signup");
   };
 
   return (
@@ -42,8 +55,10 @@ export default function Login() {
 
       <form className="ts-login-card" onSubmit={submit}>
         <div className="ts-wordmark ts-login-mark">TAKE<span>STUDIO</span></div>
-        <div className="ts-eyebrow">— Seguimiento de clientes —</div>
-        <h1 className="ts-login-title">Ingresá a tu <span className="ts-ital">cuenta</span></h1>
+        <div className="ts-eyebrow">— Seguimiento de leads —</div>
+        <h1 className="ts-login-title">
+          {isSignup ? <>Creá tu <span className="ts-ital">cuenta</span></> : <>Ingresá a tu <span className="ts-ital">cuenta</span></>}
+        </h1>
 
         <label className="ts-label">Email</label>
         <input
@@ -52,17 +67,17 @@ export default function Login() {
           autoComplete="username"
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          placeholder="ventas@takestudio.com.ar"
+          placeholder="tuemail@takestudio.com.ar"
         />
 
         <label className="ts-label">Contraseña</label>
         <input
           className="ts-input"
           type="password"
-          autoComplete="current-password"
+          autoComplete={isSignup ? "new-password" : "current-password"}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
-          placeholder="••••••••"
+          placeholder={isSignup ? "Mínimo 6 caracteres" : "••••••••"}
         />
 
         {error && <div className="ts-login-error">{error}</div>}
@@ -85,9 +100,13 @@ export default function Login() {
           disabled={!email || !password}
         >
           {busy ? (
-            <span className="ts-btn-ic"><span className="ts-spinner" /> Ingresando</span>
-          ) : "Entrar"}
+            <span className="ts-btn-ic"><span className="ts-spinner" /> {isSignup ? "Creando" : "Ingresando"}</span>
+          ) : isSignup ? "Crear cuenta" : "Entrar"}
         </SpecularButton>
+
+        <button type="button" className="ts-login-switch" onClick={switchMode}>
+          {isSignup ? "¿Ya tenés cuenta? Iniciá sesión" : "¿Sos asesor nuevo? Creá tu cuenta"}
+        </button>
       </form>
     </div>
   );

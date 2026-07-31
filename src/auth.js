@@ -5,6 +5,7 @@ import { auth } from "./firebase";
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut,
 } from "firebase/auth";
 
@@ -17,6 +18,12 @@ export function onAuth(cb) {
 // Inicia sesión. Lanza error si las credenciales son inválidas.
 export async function login(email, password) {
   const cred = await signInWithEmailAndPassword(auth, email.trim(), password);
+  return cred.user;
+}
+
+// Crea una cuenta nueva (queda pendiente de aprobación del admin).
+export async function signup(email, password) {
+  const cred = await createUserWithEmailAndPassword(auth, email.trim(), password);
   return cred.user;
 }
 
@@ -37,6 +44,9 @@ export function authErrorMessage(code) {
     "auth/network-request-failed": "Error de red. Revisá tu conexión.",
     "auth/operation-not-allowed":
       "El login por email/contraseña no está habilitado en Firebase (Console → Authentication → Sign-in method).",
+    "auth/email-already-in-use": "Ya existe una cuenta con ese email.",
+    "auth/weak-password": "La contraseña es muy corta (mínimo 6 caracteres).",
+    "auth/missing-password": "Ingresá una contraseña.",
   };
-  return map[code] || "No se pudo iniciar sesión. Probá de nuevo.";
+  return map[code] || "No se pudo completar la operación. Probá de nuevo.";
 }

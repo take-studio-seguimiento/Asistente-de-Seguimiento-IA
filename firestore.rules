@@ -1,16 +1,62 @@
 rules_version = '2';
 
-// Reglas de seguridad de Firestore para Take Studio.
-// Solo usuarios autenticados (logueados con Firebase Auth) pueden
-// leer y escribir la colección de clientes.
+// ============================================================
+// Reglas de seguridad de Firestore para Take Studio
+// - users/{uid}: perfil de cada cuenta (role + status).
+// - clientes/{id}: cada lead tiene ownerId (el asesor dueño).
+// Admin (nicolas@takestudio.com.ar) ve/gestiona todo y aprueba cuentas.
+// Un asesor solo accede a SUS leads, y solo si está aprobado.
+// ============================================================
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    match /clientes/{clienteId} {
-      allow read, write: if request.auth != null;
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isAdmin() {
+      return isSignedIn() && request.auth.token.email == 'nicolas@takestudio.com.ar';
+    }
+    function myUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+    function isApproved() {
+      return isAdmin() ||
+        (isSignedIn()
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && myUserData().status == 'approved');
     }
 
-    // Todo lo demás queda bloqueado por defecto.
+    // Perfiles de usuario
+    match /users/{uid} {
+      allow read: if isAdmin() || (isSignedIn() && request.auth.uid == uid);
+
+      // Un usuario solo puede crear su PROPIO doc como asesor pendiente
+      // (no puede auto-nombrarse admin ni auto-aprobarse).
+      allow create: if isAdmin() ||
+        (request.auth.uid == uid
+          && request.resource.data.role == 'asesor'
+          && request.resource.data.status == 'pending');
+
+      // Solo el admin cambia rol/estado; el usuario puede editar su nombre.
+      allow update: if isAdmin() ||
+        (request.auth.uid == uid
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.status == resource.data.status);
+
+      allow delete: if isAdmin();
+    }
+
+    // Leads
+    match /clientes/{clienteId} {
+      allow read: if isAdmin() ||
+        (isApproved() && resource.data.ownerId == request.auth.uid);
+      allow create: if isAdmin() ||
+        (isApproved() && request.resource.data.ownerId == request.auth.uid);
+      allow update, delete: if isAdmin() ||
+        (isApproved() && resource.data.ownerId == request.auth.uid);
+    }
+
+    // Todo lo demás, bloqueado.
     match /{document=**} {
       allow read, write: if false;
     }

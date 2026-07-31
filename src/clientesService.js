@@ -9,20 +9,21 @@ import {
   doc,
   setDoc,
   deleteDoc,
-  getDocs,
   onSnapshot,
-  writeBatch,
+  query,
+  where,
 } from "firebase/firestore";
 
 const COL = "clientes";
 const colRef = collection(db, COL);
 
-// Escucha en tiempo real. Cada vez que algo cambia en la colección,
-// llama a `cb` con el listado completo de clientes.
-// Devuelve la función para des-suscribirse.
-export function subscribeClientes(cb, onError) {
+// Escucha en tiempo real los leads que corresponden al usuario:
+// - admin: todos.
+// - asesor: solo los suyos (ownerId == uid).
+export function subscribeClientes({ uid, isAdmin }, cb, onError) {
+  const ref = isAdmin ? colRef : query(colRef, where("ownerId", "==", uid));
   return onSnapshot(
-    colRef,
+    ref,
     (snap) => {
       const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
       cb(list);
@@ -45,17 +46,4 @@ export async function upsertCliente(client) {
 // Borra un cliente por id.
 export async function removeCliente(id) {
   await deleteDoc(doc(db, COL, id));
-}
-
-// Si la colección está vacía, carga los datos de ejemplo una sola vez.
-export async function seedIfEmpty(seed) {
-  const snap = await getDocs(colRef);
-  if (!snap.empty) return false;
-  const batch = writeBatch(db);
-  seed.forEach((c) => {
-    const { id, ...data } = c;
-    batch.set(doc(db, COL, id), data);
-  });
-  await batch.commit();
-  return true;
 }

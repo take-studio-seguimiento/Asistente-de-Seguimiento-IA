@@ -3,11 +3,17 @@ import {
   subscribeClientes,
   upsertCliente,
   removeCliente,
-  seedIfEmpty,
 } from "./clientesService";
 import { callGemini } from "./gemini";
 import { fetchGoogleDoc } from "./docs";
 import { onAuth, logout } from "./auth";
+import {
+  ensureUserDoc,
+  subscribeUserProfile,
+  subscribeAllUsers,
+  setUserStatus,
+  isAdminEmail,
+} from "./usersService";
 import Login from "./Login";
 import SpecularButton from "./SpecularButton";
 import SpotlightCard from "./SpotlightCard";
@@ -159,93 +165,149 @@ function clientContextBlock(c) {
 - Estado actual: ${statusMeta(c.status).label}`;
 }
 
-// ================= APP (puerta de autenticación) =================
+// ================= APP (puerta de autenticación + aprobación) =================
 export default function App() {
-  // undefined = verificando sesión | null = sin sesión | objeto = logueado
-  const [user, setUser] = useState(undefined);
+  const [user, setUser] = useState(undefined);       // undefined=verificando, null=sin sesión
+  const [profile, setProfile] = useState(undefined); // undefined=cargando, null=sin doc, obj
 
-  useEffect(() => onAuth((u) => setUser(u)), []);
+  useEffect(() => onAuth((u) => setUser(u ?? null)), []);
 
-  if (user === undefined) {
-    return (
-      <div className="ts-root">
-        <style>{CSS}</style>
-        <div className="ts-loading">Cargando…</div>
-      </div>
-    );
+  // Asegura el perfil y lo escucha en vivo (para que "pendiente" pase a
+  // "aprobado" solo cuando el admin habilita, sin re-loguear).
+  useEffect(() => {
+    if (!user) { setProfile(null); return; }
+    setProfile(undefined);
+    let unsub = () => {};
+    (async () => {
+      try { await ensureUserDoc(user); } catch (e) { console.error("[users] ensure:", e); }
+      unsub = subscribeUserProfile(user.uid, setProfile, () => setProfile(null));
+    })();
+    return () => unsub();
+  }, [user?.uid]);
+
+  const shell = (child) => <div className="ts-root"><style>{CSS}</style>{child}</div>;
+
+  if (user === undefined) return shell(<div className="ts-loading">Cargando…</div>);
+  if (!user) return shell(<Login />);
+  if (profile === undefined) return shell(<div className="ts-loading">Verificando cuenta…</div>);
+
+  const isAdmin = isAdminEmail(user.email) || profile?.role === "admin";
+  const approved = isAdmin || profile?.status === "approved";
+
+  if (profile?.status === "rejected") {
+    return shell(<AccountStatus title="Cuenta no habilitada"
+      msg="El administrador no habilitó esta cuenta. Si creés que es un error, contactalo." />);
+  }
+  if (!approved) {
+    return shell(<AccountStatus title="Cuenta pendiente"
+      msg="Tu cuenta se creó y está esperando la aprobación del administrador. Vas a poder entrar apenas te habiliten." />);
   }
 
-  if (!user) {
-    return (
-      <div className="ts-root">
-        <style>{CSS}</style>
-        <Login />
-      </div>
-    );
-  }
+  return shell(<Workspace uid={user.uid} isAdmin={isAdmin} />);
+}
 
+// Pantalla de estado de cuenta (pendiente / no habilitada)
+function AccountStatus({ title, msg }) {
   return (
-    <div className="ts-root">
-      <style>{CSS}</style>
-      <Workspace />
+    <div className="ts-login">
+      <div className="ts-status-card">
+        <div className="ts-wordmark ts-login-mark">TAKE<span>STUDIO</span></div>
+        <h1 className="ts-login-title">{title}</h1>
+        <p className="ts-status-msg">{msg}</p>
+        <button className="ts-btn-ghost" onClick={() => logout()}>Salir</button>
+      </div>
     </div>
   );
 }
 
-// ================= WORKSPACE (app con sesión iniciada) =================
-// Solo se monta cuando hay un usuario logueado, así Firestore nunca se
-// consulta sin sesión (necesario con las reglas cerradas).
-function Workspace() {
+// ================= WORKSPACE (app con sesión aprobada) =================
+function Workspace({ uid, isAdmin }) {
   const [clients, setClients] = useState(null);
   const [openId, setOpenId] = useState(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [showAsesores, setShowAsesores] = useState(false);
 
-  // Carga inicial + escucha en tiempo real desde Firestore.
   useEffect(() => {
-    let unsub = () => {};
-    (async () => {
-      try {
-        await seedIfEmpty(SEED);
-      } catch (e) {
-        console.error("[Firestore] no se pudo sembrar datos de ejemplo:", e);
-      }
-      unsub = subscribeClientes(
-        (list) => setClients(list),
-        () => setClients([]) // ante un error, mostramos tablero vacío en vez de spinner infinito
-      );
-    })();
-    return () => unsub();
-  }, []);
-
-  // Escribe (crea o actualiza) en Firestore. El listener refresca el estado.
-  const upsert = (client) => {
-    upsertCliente(client).catch((e) =>
-      console.error("[Firestore] no se pudo guardar el cliente:", e)
+    const unsub = subscribeClientes(
+      { uid, isAdmin },
+      (list) => setClients(list),
+      () => setClients([])
     );
+    return () => unsub();
+  }, [uid, isAdmin]);
+
+  const upsert = (client) => {
+    upsertCliente(client).catch((e) => console.error("[Firestore] no se pudo guardar el lead:", e));
   };
   const remove = (id) =>
-    removeCliente(id).catch((e) =>
-      console.error("[Firestore] no se pudo borrar el cliente:", e)
-    );
+    removeCliente(id).catch((e) => console.error("[Firestore] no se pudo borrar el lead:", e));
   const openClient = clients?.find((c) => c.id === openId);
 
   return (
     <>
       {!openClient ? (
         <Dashboard clients={clients} onOpen={setOpenId} onAdd={() => setShowAdd(true)}
-          onSave={upsert} onLogout={() => logout()} />
+          onSave={upsert} onLogout={() => logout()} isAdmin={isAdmin}
+          onOpenAsesores={() => setShowAsesores(true)} />
       ) : (
         <Detail client={openClient} onBack={() => setOpenId(null)} onSave={upsert}
           onDelete={(id) => { remove(id); setOpenId(null); }} />
       )}
       {showAdd && <AddModal onClose={() => setShowAdd(false)}
-        onCreate={(c) => { upsert(c); setShowAdd(false); setOpenId(c.id); }} />}
+        onCreate={(c) => { upsert({ ...c, ownerId: c.ownerId || uid }); setShowAdd(false); setOpenId(c.id); }} />}
+      {showAsesores && <AsesoresModal onClose={() => setShowAsesores(false)} />}
     </>
   );
 }
 
+// ================= ASESORES (panel admin: aprobar / rechazar) =================
+const statusLabel = (s) => (s === "approved" ? "Aprobado" : s === "rejected" ? "No habilitado" : "Pendiente");
+
+function AsesoresModal({ onClose }) {
+  const [users, setUsers] = useState(null);
+  useEffect(() => subscribeAllUsers(setUsers, () => setUsers([])), []);
+
+  const setStatus = (id, status) =>
+    setUserStatus(id, status).catch((e) => console.error("[users] no se pudo cambiar estado:", e));
+
+  const pend = (users || []).filter((u) => u.status === "pending");
+  const others = (users || []).filter((u) => u.status !== "pending");
+
+  const Row = (u) => (
+    <div key={u.id} className="ts-asesor">
+      <div className="ts-asesor-info">
+        <div className="ts-asesor-email">{u.email || "(sin email)"}{u.role === "admin" ? " · admin" : ""}</div>
+        <div className={`ts-asesor-status st-${u.status}`}>{statusLabel(u.status)}</div>
+      </div>
+      {u.role !== "admin" && (
+        <div className="ts-asesor-actions">
+          {u.status !== "approved" && <button className="ts-btn-primary ts-mini" onClick={() => setStatus(u.id, "approved")}>Aprobar</button>}
+          {u.status !== "rejected" && <button className="ts-btn-ghost ts-mini" onClick={() => setStatus(u.id, "rejected")}>Rechazar</button>}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="ts-overlay" onClick={onClose}>
+      <div className="ts-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="ts-modal-head">
+          <h2>Asesores</h2>
+          <button className="ts-x" onClick={onClose} aria-label="Cerrar"><IconX /></button>
+        </div>
+        <div className="ts-modal-body">
+          {!users && <div className="ts-empty">Cargando…</div>}
+          {users && users.length === 0 && <div className="ts-empty">Todavía no hay cuentas registradas.</div>}
+          {pend.length > 0 && <><div className="ts-asesor-h">Pendientes de aprobación</div>{pend.map(Row)}</>}
+          {others.length > 0 && <><div className="ts-asesor-h">Cuentas</div>{others.map(Row)}</>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ================= DASHBOARD =================
-function Dashboard({ clients, onOpen, onAdd, onSave, onLogout }) {
+function Dashboard({ clients, onOpen, onAdd, onSave, onLogout, isAdmin, onOpenAsesores }) {
   const [filter, setFilter] = useState("todos");
   const [view, setView] = useState("agenda"); // agenda | fichas
   const [query, setQuery] = useState("");
@@ -299,6 +361,7 @@ function Dashboard({ clients, onOpen, onAdd, onSave, onLogout }) {
       <header className="ts-header">
         <div className="ts-wordmark">TAKE<span>STUDIO</span></div>
         <div className="ts-header-actions">
+          {isAdmin && <button className="ts-btn-ghost" onClick={onOpenAsesores}>Asesores</button>}
           <button className="ts-btn-ghost" onClick={onLogout}>Salir</button>
           <SpecularButton size="sm" radius={999} tint="#1C1A17" tintOpacity={1}
             textColor="#F4F1EA" lineColor="#F5DE97" baseColor="#6a5a33" intensity={1.6}
@@ -814,6 +877,25 @@ const CSS = `
 .ts-login-card .ts-label{margin-top:14px}
 .ts-login-error{background:rgba(201,138,138,.14);border:1px solid rgba(201,138,138,.4);color:#EBB4B4;border-radius:var(--r-sm);
   padding:10px 13px;font-size:13px;margin:12px 0 2px}
+.ts-login-switch{background:none;border:none;color:var(--ink-soft);font:inherit;font-size:13px;cursor:pointer;margin-top:16px;text-align:center;width:100%}
+.ts-login-switch:hover{color:var(--gold-deep)}
+/* pantallas de estado de cuenta */
+.ts-status-card{position:relative;z-index:1;width:100%;max-width:420px;text-align:center;
+  background:var(--glass);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+  border:1px solid var(--line);border-radius:24px;padding:40px 34px;box-shadow:var(--shadow);
+  display:flex;flex-direction:column;align-items:center;gap:8px}
+.ts-status-msg{color:var(--ink-soft);font-size:14px;line-height:1.6;margin:6px 0 20px}
+/* panel de asesores */
+.ts-asesor-h{font-family:'Poppins',sans-serif;font-weight:600;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);margin:18px 0 10px}
+.ts-asesor{display:flex;justify-content:space-between;align-items:center;gap:12px;background:var(--input-bg);border:1px solid var(--line);border-radius:var(--r-sm);padding:12px 14px;margin-bottom:8px}
+.ts-asesor-info{min-width:0}
+.ts-asesor-email{font-size:14px;color:var(--ink);word-break:break-all}
+.ts-asesor-status{font-size:11px;font-weight:600;margin-top:3px}
+.ts-asesor-status.st-approved{color:#8FCB88}
+.ts-asesor-status.st-rejected{color:#EBB4B4}
+.ts-asesor-status.st-pending{color:var(--gold-deep)}
+.ts-asesor-actions{display:flex;gap:8px;flex:none}
+.ts-mini{padding:8px 14px;font-size:12.5px}
 .ts-wordmark{font-family:'Poppins',sans-serif;font-weight:700;font-size:22px;letter-spacing:.02em;line-height:1}
 .ts-wordmark span{display:block;font-size:9px;font-weight:600;letter-spacing:.42em;color:var(--ink-soft);margin-top:1px}
 .ts-hero{text-align:center;padding:48px 0 30px}
