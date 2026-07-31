@@ -32,7 +32,9 @@ Estilo: español rioplatense (voseo argentino), cálido, cercano y profesional. 
 
 // Mantiene la misma interfaz que el viejo callClaude:
 // recibe messages con roles "user"/"assistant" y devuelve un string.
-export async function callGemini(messages, systemExtra = "") {
+// Con { jsonMode: true } fuerza a Gemini a responder JSON válido
+// (para la extracción de datos, así el parseo nunca falla).
+export async function callGemini(messages, systemExtra = "", { jsonMode = false } = {}) {
   // Gemini usa el rol "model" en vez de "assistant".
   const contents = messages.map((m) => ({
     role: m.role === "assistant" ? "model" : "user",
@@ -45,8 +47,9 @@ export async function callGemini(messages, systemExtra = "") {
     },
     contents,
     generationConfig: {
-      temperature: 0.7,
+      temperature: jsonMode ? 0.2 : 0.7,
       maxOutputTokens: 2048,
+      ...(jsonMode ? { responseMimeType: "application/json" } : {}),
     },
   };
 

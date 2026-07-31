@@ -11,7 +11,7 @@ import { onAuth, logout } from "./auth";
 import Login from "./Login";
 import SpecularButton from "./SpecularButton";
 import SpotlightCard from "./SpotlightCard";
-import { IconSearch, IconX, IconPlus, IconCalendar, IconCheck, IconSparkle, IconChevronDown, IconChevronUp } from "./icons";
+import { IconSearch, IconX, IconPlus, IconCalendar, IconCheck, IconSparkle, IconChevronDown, IconChevronUp, IconExternal } from "./icons";
 
 // ============================================================
 // Take Studio — Seguimiento de Clientes (Prototipo v3)
@@ -102,6 +102,10 @@ function celebranteLabel(eventType) {
   if (eventType === "Egresados") return "Curso / división";
   return "Homenajeada/o";
 }
+// ¿Es un link válido (http/https)?
+function isUrl(s) {
+  return typeof s === "string" && /^https?:\/\/\S+/i.test(s.trim());
+}
 // Normaliza texto para búsqueda: minúsculas y sin acentos.
 function norm(s) {
   return (s || "").toString().toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "");
@@ -116,14 +120,11 @@ function ddmmyyyy(iso) {
 function matchesQuery(c, q) {
   if (!q) return true;
   const hay = norm([
-    c.name, c.celebrante, c.eventType, c.context, c.phone,
+    c.name, c.celebrante, c.eventType, c.pack, c.context,
     c.meetingDate, ddmmyyyy(c.meetingDate), c.meetingDate ? prettyDate(c.meetingDate) : "",
     c.fechaFiesta, ddmmyyyy(c.fechaFiesta), c.fechaFiesta ? prettyDate(c.fechaFiesta) : "",
   ].join(" "));
-  if (hay.includes(q)) return true;
-  const qDigits = q.replace(/\D/g, "");
-  if (qDigits && (c.phone || "").replace(/\D/g, "").includes(qDigits)) return true;
-  return false;
+  return hay.includes(q);
 }
 function prettyDate(iso, time) {
   if (!iso) return "Sin fecha";
@@ -148,10 +149,12 @@ function gcalUrl(client) {
 // El cliente de IA vive en src/gemini.js (callGemini).
 
 function clientContextBlock(c) {
-  return `Ficha del cliente:
-- Nombre: ${c.name}
+  return `Ficha del lead:
+- Nombre: ${c.name}${c.celebrante ? ` (festejado/a: ${c.celebrante})` : ""}
 - Tipo de evento: ${c.eventType}
 - Fecha de reunión: ${c.meetingDate || "no especificada"}
+- Fecha de la fiesta: ${c.fechaFiesta || "no especificada"}
+- Pack de interés: ${c.pack || "no especificado"}
 - Contexto / notas: ${c.context || "sin notas"}
 - Estado actual: ${statusMeta(c.status).label}`;
 }
@@ -300,7 +303,7 @@ function Dashboard({ clients, onOpen, onAdd, onSave, onLogout }) {
           <SpecularButton size="sm" radius={999} tint="#1C1A17" tintOpacity={1}
             textColor="#F4F1EA" lineColor="#F5DE97" baseColor="#6a5a33" intensity={1.6}
             shineSize={16} autoAnimate proximity={280} onClick={onAdd}>
-            <span className="ts-btn-ic"><IconPlus /> Nuevo cliente</span>
+            <span className="ts-btn-ic"><IconPlus /> Nuevo lead</span>
           </SpecularButton>
         </div>
       </header>
@@ -331,7 +334,7 @@ function Dashboard({ clients, onOpen, onAdd, onSave, onLogout }) {
         <>
           <div className="ts-searchbar">
             <span className="ts-search-icon"><IconSearch /></span>
-            <input className="ts-search-input" placeholder="Buscar por nombre, teléfono, fecha de fiesta o reunión…"
+            <input className="ts-search-input" placeholder="Buscar por nombre, festejado, pack o fecha…"
               value={query} onChange={(e) => setQuery(e.target.value)} />
             {query && <button className="ts-search-clear" onClick={() => setQuery("")} aria-label="Limpiar búsqueda"><IconX /></button>}
           </div>
@@ -375,7 +378,7 @@ function AddModal({ onClose, onCreate }) {
   const [docUrl, setDocUrl] = useState("");
   const [importing, setImporting] = useState(false);
   const [docError, setDocError] = useState("");
-  const [form, setForm] = useState({ name: "", celebrante: "", eventType: "Quince", phone: "", meetingDate: "", fechaFiesta: "", context: "" });
+  const [form, setForm] = useState({ name: "", celebrante: "", eventType: "Quince", pack: "", kommo: "", meetingDate: "", fechaFiesta: "", context: "" });
 
   const importDoc = async () => {
     if (!docUrl.trim() || importing) return;
@@ -393,7 +396,7 @@ function AddModal({ onClose, onCreate }) {
   };
 
   const build = (extra = {}) => ({
-    id: "c-" + Date.now(), name: "", celebrante: "", eventType: "Quince", phone: "",
+    id: "c-" + Date.now(), name: "", celebrante: "", eventType: "Quince", pack: "", kommo: "",
     meetingDate: "", fechaFiesta: "", context: "", status: "nuevo", chat: [], whatsapp: "",
     reminder: emptyReminder(), tasks: [], createdAt: Date.now(), updatedAt: Date.now(), ...extra,
   });
@@ -404,42 +407,46 @@ function AddModal({ onClose, onCreate }) {
     try {
       const out = await callGemini([{
         role: "user",
-        content: `Hoy es ${todayISO()}. Extraé los datos de la nota/transcripción y devolvé SOLO un JSON válido, sin markdown, con esta forma exacta:
-{"name": string, "celebrante": string, "eventType": ${EVENT_TYPES.map((t) => `"${t}"`).join("|")}, "phone": string, "meetingDate": string, "fechaFiesta": string, "context": string}
+        content: `Hoy es ${todayISO()}. Sos un extractor de datos. A partir de la nota y/o transcripción de una reunión de Take Studio, completá esta ficha. Devolvé SOLO un objeto JSON con esta forma exacta:
+{"name": string, "celebrante": string, "eventType": ${EVENT_TYPES.map((t) => `"${t}"`).join("|")}, "pack": string, "meetingDate": string, "fechaFiesta": string, "context": string}
 
-Reglas:
-- "name": nombre del cliente / persona de contacto.
-- "eventType": elegí la categoría que mejor encaje de la lista. Un cumpleaños de 50 (o cualquier edad que no sea 15 ni 18) es "Cumpleaños". Una producción de fotos es "Book". Si ninguna encaja, "Otro".
-- "celebrante": nombre del/la festejado/a (la quinceañera, los novios, la homenajeada). Si es el mismo que el cliente, repetilo.
-- "phone": solo dígitos si aparece, si no string vacío.
-- "meetingDate": fecha de la reunión en formato YYYY-MM-DD. Convertí formatos como DD/MM/YYYY. Si no aparece, string vacío.
-- "fechaFiesta": fecha del evento/fiesta en formato YYYY-MM-DD (convertí DD/MM/YYYY). Si no aparece, string vacío.
-- "context": resumen limpio y breve de la reunión (objeciones, intereses, presupuesto, próximos pasos).
-Si un dato no está, string vacío.
+Reglas de cada campo:
+- "name": nombre del lead / persona de contacto (quien organiza o consulta).
+- "celebrante": nombre del/la festejado/a (la quinceañera, los novios, la homenajeada). Si coincide con el name, repetilo. Si no se menciona, "".
+- "eventType": la categoría que mejor encaje. Cumpleaños de 50 o cualquier edad distinta de 15/18 → "Cumpleaños". Producción/sesión de fotos → "Book". Si ninguna encaja → "Otro".
+- "pack": el pack o servicio de interés mencionado (ej. "Pack Oro", "solo digital", "foto + video"). Si no se menciona, "".
+- "meetingDate": fecha de la reunión en formato YYYY-MM-DD (convertí DD/MM/YYYY, "ayer", "el lunes", etc. usando que hoy es ${todayISO()}). Si no aparece, "".
+- "fechaFiesta": fecha del evento/fiesta en formato YYYY-MM-DD. Si no aparece, "".
+- "context": un resumen BREVE (2 a 4 oraciones) de lo importante: qué pasó, nivel de interés, objeciones y próximos pasos. NO repitas acá los datos que ya van en otros campos (nombre, fechas, pack, tipo); el contexto es solo el análisis de la charla.
 
-Nota:
+Extraé la info aunque esté redactada de forma informal o dispersa en la transcripción.
+
+NOTA / TRANSCRIPCIÓN:
 ${paste}`,
-      }]);
-      const parsed = JSON.parse(out.replace(/```json|```/g, "").trim());
+      }], "", { jsonMode: true });
+      const jsonStr = out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1);
+      const parsed = JSON.parse(jsonStr);
       const isISO = (s) => typeof s === "string" && /^\d{4}-\d{2}-\d{2}$/.test(s);
       onCreate(build({
         name: parsed.name || "Sin nombre",
         celebrante: parsed.celebrante || "",
         eventType: EVENT_TYPES.includes(parsed.eventType) ? parsed.eventType : "Otro",
-        phone: parsed.phone || "",
+        pack: parsed.pack || "",
         meetingDate: isISO(parsed.meetingDate) ? parsed.meetingDate : "",
         fechaFiesta: isISO(parsed.fechaFiesta) ? parsed.fechaFiesta : "",
         context: parsed.context || paste,
       }));
-    } catch { onCreate(build({ name: "Sin nombre", context: paste })); }
-    finally { setParsing(false); }
+    } catch (e) {
+      console.error("[IA] no se pudo extraer la ficha:", e);
+      onCreate(build({ name: "Sin nombre", context: paste }));
+    } finally { setParsing(false); }
   };
 
   return (
     <div className="ts-overlay" onClick={onClose}>
       <div className="ts-modal" onClick={(e) => e.stopPropagation()}>
         <div className="ts-modal-head">
-          <h2>Nuevo cliente</h2>
+          <h2>Nuevo lead</h2>
           <button className="ts-x" onClick={onClose} aria-label="Cerrar"><IconX /></button>
         </div>
         <div className="ts-seg">
@@ -479,12 +486,10 @@ ${paste}`,
                 </select>
               </div>
               <div style={{ flex: 1 }}>
-                <label className="ts-label">Teléfono</label>
-                <input className="ts-input" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                <label className="ts-label">{celebranteLabel(form.eventType)} (nombre)</label>
+                <input className="ts-input" value={form.celebrante} onChange={(e) => setForm({ ...form, celebrante: e.target.value })} />
               </div>
             </div>
-            <label className="ts-label">{celebranteLabel(form.eventType)} (nombre)</label>
-            <input className="ts-input" value={form.celebrante} onChange={(e) => setForm({ ...form, celebrante: e.target.value })} />
             <div className="ts-row">
               <div style={{ flex: 1 }}>
                 <label className="ts-label">Fecha de reunión</label>
@@ -495,6 +500,10 @@ ${paste}`,
                 <input className="ts-input" type="date" value={form.fechaFiesta} onChange={(e) => setForm({ ...form, fechaFiesta: e.target.value })} />
               </div>
             </div>
+            <label className="ts-label">Pack de interés</label>
+            <input className="ts-input" value={form.pack} onChange={(e) => setForm({ ...form, pack: e.target.value })} />
+            <label className="ts-label">Link de Kommo (tarjeta del lead)</label>
+            <input className="ts-input" value={form.kommo} placeholder="https://…kommo.com/…" onChange={(e) => setForm({ ...form, kommo: e.target.value })} />
             <label className="ts-label">Notas de la reunión</label>
             <textarea className="ts-textarea" rows={4} value={form.context} onChange={(e) => setForm({ ...form, context: e.target.value })} />
             <button className="ts-btn-primary full" onClick={() => onCreate(build(form))} disabled={!form.name.trim()}>Crear ficha</button>
@@ -519,6 +528,18 @@ function Detail({ client, onBack, onSave, onDelete }) {
 
   useEffect(() => setC({ ...client, reminder: client.reminder || emptyReminder() }), [client.id]);
   useEffect(() => { chatEnd.current?.scrollIntoView({ behavior: "smooth" }); }, [c.chat, thinking]);
+
+  // Esc vuelve al tablero (si no estás escribiendo en un campo).
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.key !== "Escape") return;
+      const tag = document.activeElement?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") { document.activeElement.blur(); return; }
+      onBack();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onBack]);
 
   const persist = (next) => { setC(next); onSave(next); };
   const setR = (patch) => persist({ ...c, reminder: { ...c.reminder, ...patch } });
@@ -568,11 +589,11 @@ function Detail({ client, onBack, onSave, onDelete }) {
       const out = await callGemini([{
         role: "user",
         content: clientContextBlock(c) + (convo ? "\n\nConversación:\n" + convo : "") +
-          `\n\nHoy es ${todayISO()}. Proponé el próximo seguimiento y devolvé SOLO un JSON válido, sin markdown: {"text": string, "date": "YYYY-MM-DD", "time": "HH:MM"}. "text" es la tarea concreta (qué hacer). Elegí una fecha próxima y razonable.`,
-      }]);
-      const p = JSON.parse(out.replace(/```json|```/g, "").trim());
+          `\n\nHoy es ${todayISO()}. Proponé el próximo seguimiento y devolvé SOLO un JSON válido: {"text": string, "date": "YYYY-MM-DD", "time": "HH:MM"}. "text" es la tarea concreta (qué hacer). Elegí una fecha próxima y razonable.`,
+      }], "", { jsonMode: true });
+      const p = JSON.parse(out.slice(out.indexOf("{"), out.lastIndexOf("}") + 1));
       setR({ text: p.text || c.reminder.text, date: p.date || c.reminder.date, time: p.time || c.reminder.time || "10:00", done: false });
-    } catch {} finally { setSuggesting(false); }
+    } catch (e) { console.error("[IA] no se pudo sugerir seguimiento:", e); } finally { setSuggesting(false); }
   };
 
   const copyWA = () => {
@@ -612,10 +633,6 @@ function Detail({ client, onBack, onSave, onDelete }) {
 
           <div className="ts-row" style={{ marginTop: 6 }}>
             <div style={{ flex: 1 }}>
-              <label className="ts-label">Teléfono</label>
-              <input className="ts-input" value={c.phone || ""} onChange={(e) => persist({ ...c, phone: e.target.value })} />
-            </div>
-            <div style={{ flex: 1 }}>
               <label className="ts-label">Fecha de reunión</label>
               <input className="ts-input" type="date" value={c.meetingDate || ""} onChange={(e) => persist({ ...c, meetingDate: e.target.value })} />
             </div>
@@ -625,8 +642,17 @@ function Detail({ client, onBack, onSave, onDelete }) {
             </div>
           </div>
 
-          <label className="ts-label" style={{ marginTop: 18 }}>Contexto de la reunión</label>
-          <textarea className="ts-textarea" rows={6} value={c.context} onChange={(e) => persist({ ...c, context: e.target.value })} />
+          <label className="ts-label" style={{ marginTop: 18 }}>Pack de interés</label>
+          <input className="ts-input" value={c.pack || ""} placeholder="Pack o servicio que le interesa" onChange={(e) => persist({ ...c, pack: e.target.value })} />
+
+          <label className="ts-label" style={{ marginTop: 12 }}>Link de Kommo (tarjeta del lead)</label>
+          <input className="ts-input" value={c.kommo || ""} placeholder="https://…kommo.com/…" onChange={(e) => persist({ ...c, kommo: e.target.value })} />
+          {isUrl(c.kommo) && (
+            <a className="ts-btn-ghost ts-kommo-btn" href={c.kommo} target="_blank" rel="noreferrer"><IconExternal /> Abrir en Kommo</a>
+          )}
+
+          <label className="ts-label" style={{ marginTop: 18 }}>Resumen de la reunión</label>
+          <textarea className="ts-textarea" rows={5} value={c.context} onChange={(e) => persist({ ...c, context: e.target.value })} />
 
           {/* PRÓXIMO SEGUIMIENTO */}
           <div className="ts-wa-head">
@@ -698,7 +724,7 @@ function Detail({ client, onBack, onSave, onDelete }) {
               <textarea className="ts-textarea" rows={6} value={c.whatsapp} onChange={(e) => persist({ ...c, whatsapp: e.target.value })} />
               <div className="ts-wa-actions">
                 <button className="ts-btn-primary" onClick={copyWA}>{copied ? "¡Copiado!" : "Copiar mensaje"}</button>
-                {c.phone && <a className="ts-btn-ghost" href={`https://wa.me/${c.phone.replace(/\D/g, "")}?text=${encodeURIComponent(c.whatsapp)}`} target="_blank" rel="noreferrer">Abrir en WhatsApp</a>}
+                {isUrl(c.kommo) && <a className="ts-btn-ghost" href={c.kommo} target="_blank" rel="noreferrer"><IconExternal /> Abrir en Kommo</a>}
               </div>
             </div>
           ) : (
@@ -918,6 +944,7 @@ const CSS = `
 .ts-wa-head span{font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:var(--gold-deep);font-weight:600}
 .ts-wa-actions{display:flex;gap:10px;margin-top:12px}
 .ts-wa-empty{color:var(--ink-soft);font-size:13.5px;line-height:1.6;padding:16px;border:1px dashed var(--line);border-radius:var(--r-sm);background:var(--input-bg)}
+.ts-kommo-btn{margin-top:8px}
 
 /* ---- historial de tareas ---- */
 .ts-task-actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px}
